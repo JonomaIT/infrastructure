@@ -69,4 +69,17 @@ data "aws_iam_policy_document" "pipeline" {
     actions   = ["ssm:DescribeParameters"]
     resources = ["*"]
   }
+
+  # O provider AWS 6.x lê o atributo de DNS reverso de todo EIP; a AmazonVPCFullAccess não cobre.
+  statement {
+    sid       = "EipAttributesRead"
+    actions   = ["ec2:DescribeAddressesAttribute"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "EipAttributesWrite"
+    actions   = ["ec2:ModifyAddressAttribute", "ec2:ResetAddressAttribute"]
+    resources = ["arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:elastic-ip/*"]
+  }
 }

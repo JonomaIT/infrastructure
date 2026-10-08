@@ -16,6 +16,10 @@ crash.*.log
 *.tfvars
 *.tfvars.json
 
+# Os tfvars de ambiente são a configuração versionada da infra (sem segredo) e a pipeline precisa deles.
+!**/environment/**/*.tfvars
+!**/environment/*.tfvars
+
 # Ignore override files as they are usually used to override resources locally and so
 # are not checked in
 override.tf

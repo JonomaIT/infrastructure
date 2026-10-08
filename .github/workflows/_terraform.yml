@@ -1,0 +1,74 @@
+name: _terraform
+
+# Uso interno: roda init → validate → plan de um componente e, se pedido, aplica o MESMO plan salvo.
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        type: string
+        required: true
+        description: Pasta do componente Terraform (ex. deployment)
+      backend-config:
+        type: string
+        required: true
+        description: Arquivo de backend, relativo ao componente
+      var-file:
+        type: string
+        required: true
+        description: Arquivo de variáveis, relativo ao componente
+      apply:
+        type: boolean
+        default: false
+        description: Aplica o plan gerado neste job
+
+jobs:
+  terraform:
+    name: ${{ inputs.apply && 'Plan + apply' || 'Plan' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ vars.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      # Sem access key: o GitHub emite um token OIDC e a AWS troca por credenciais temporárias.
+      # Role por convenção de nome: github-actions-<repo> (criada no componente bootstrap).
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/github-actions-${{ github.event.repository.name }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Terraform init
+        run: terraform init -backend-config=${{ inputs.backend-config }}
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        run: terraform plan -var-file=${{ inputs.var-file }} -out=tfplan
+
+      - name: Plan summary
+        run: |
+          {
+            echo "### ${{ inputs.working-directory }} (${{ inputs.var-file }})"
+            echo '```'
+            terraform show -no-color tfplan | grep -E '^(Plan:|No changes)' || echo "No changes."
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Aplica exatamente o plan revisado acima; se o state mudou no meio, o Terraform recusa.
+      - name: Terraform apply
+        if: inputs.apply
+        run: terraform apply tfplan

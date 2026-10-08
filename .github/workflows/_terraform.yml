@@ -1,6 +1,7 @@
 name: _terraform
 
 # Uso interno: roda init → validate → plan de um componente e, se pedido, aplica o MESMO plan salvo.
+# Com destroy: true o plan é de destruição (-destroy); o apply continua sendo do plan salvo.
 on:
   workflow_call:
     inputs:
@@ -20,10 +21,14 @@ on:
         type: boolean
         default: false
         description: Aplica o plan gerado neste job
+      destroy:
+        type: boolean
+        default: false
+        description: Gera um plan de destruição (usado só pelo destroy.yml)
 
 jobs:
   terraform:
-    name: ${{ inputs.apply && 'Plan + apply' || 'Plan' }}
+    name: ${{ inputs.destroy && 'Destroy' || (inputs.apply && 'Plan + apply' || 'Plan') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -57,7 +62,7 @@ jobs:
         run: terraform validate
 
       - name: Terraform plan
-        run: terraform plan -var-file=${{ inputs.var-file }} -out=tfplan
+        run: terraform plan ${{ inputs.destroy && '-destroy' || '' }} -var-file=${{ inputs.var-file }} -out=tfplan
 
       - name: Plan summary
         run: |

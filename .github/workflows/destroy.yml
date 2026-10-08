@@ -1,0 +1,95 @@
+name: Destroy
+
+# Destrói todo o lab multi-região. Só manual, com confirmação digitada e aprovação do Environment "destroy".
+# Ordem inversa da criação: peering primeiro (depende das VPCs), depois as regiões.
+# Para subir de novo: Run workflow no "Multiregion".
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        type: string
+        required: true
+        description: Digite "destroy" para confirmar a destruição de todo o ambiente
+
+permissions:
+  contents: read
+  id-token: write # necessário para o OIDC com a AWS
+
+# Mesmo grupo do Multiregion: nunca destrói enquanto um apply roda (e vice-versa).
+concurrency:
+  group: terraform-multiregion
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check confirmation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate input and branch
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$CONFIRM" != "destroy" ]; then
+            echo "::error::Confirmação inválida. Digite exatamente: destroy"
+            exit 1
+          fi
+          if [ "$REF" != "refs/heads/main" ]; then
+            echo "::error::Destroy só roda a partir da main (recebido: $REF)"
+            exit 1
+          fi
+
+  approve:
+    name: Approve destroy
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: destroy # required reviewers: o job espera aprovação antes de rodar
+    steps:
+      - name: Approved
+        run: echo "Destroy aprovado por ${{ github.actor }}" >> "$GITHUB_STEP_SUMMARY"
+
+  post-deployment:
+    name: Post-deployment (peering)
+    needs: approve
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: post-deployment
+      backend-config: environment/backend.tfvars
+      var-file: environment/terraform.tfvars
+      apply: true
+      destroy: true
+
+  sa-east-1:
+    name: Deployment sa-east-1
+    needs: post-deployment
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: deployment
+      backend-config: environment/sa-east-1/backend.tfvars
+      var-file: environment/sa-east-1/terraform.tfvars
+      apply: true
+      destroy: true
+
+  us-east-1:
+    name: Deployment us-east-1
+    needs: sa-east-1
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: deployment
+      backend-config: environment/us-east-1/backend.tfvars
+      var-file: environment/us-east-1/terraform.tfvars
+      apply: true
+      destroy: true
+
+  pre-deployment:
+    name: Pre-deployment
+    needs: us-east-1
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: pre-deployment
+      backend-config: environment/backend.tfvars
+      var-file: environment/terraform.tfvars
+      apply: true
+      destroy: true

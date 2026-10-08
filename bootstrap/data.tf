@@ -24,7 +24,12 @@ data "aws_iam_policy_document" "trust" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
+      # Dois formatos de sub: o imutável (com IDs numéricos, usado quando o repo tem
+      # use_immutable_subject = true) e o clássico (só nomes). O imutável não é enganado
+      # por um repo/org recriado com o mesmo nome.
       values = [
+        "repo:${var.github_org}@${var.github_org_id}/${var.github_repo}@${var.github_repo_id}:ref:refs/heads/main",
+        "repo:${var.github_org}@${var.github_org_id}/${var.github_repo}@${var.github_repo_id}:pull_request",
         "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/main",
         "repo:${var.github_org}/${var.github_repo}:pull_request",
       ]

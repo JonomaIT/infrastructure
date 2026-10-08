@@ -13,6 +13,16 @@ variable "github_repo" {
   description = "Repositório que pode assumir a role (ex: infrastructure)"
 }
 
+variable "github_org_id" {
+  type        = string
+  description = "ID numérico da organização (gh api orgs/<org> -q .id), usado no sub imutável do OIDC"
+}
+
+variable "github_repo_id" {
+  type        = string
+  description = "ID numérico do repositório (gh api repos/<org>/<repo> -q .id), usado no sub imutável do OIDC"
+}
+
 variable "state_bucket" {
   type        = string
   description = "Bucket S3 onde ficam os states do Terraform"

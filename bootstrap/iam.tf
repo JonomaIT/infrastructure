@@ -20,3 +20,10 @@ resource "aws_iam_role_policy" "pipeline" {
   role   = aws_iam_role.github_actions.id
   policy = data.aws_iam_policy_document.pipeline.json
 }
+
+# Stack ecs (cluster, load balancers, Cloud Map, Route 53 privado e VPC Link)
+resource "aws_iam_role_policy" "ecs" {
+  name   = "terraform-ecs"
+  role   = aws_iam_role.github_actions.id
+  policy = data.aws_iam_policy_document.ecs.json
+}

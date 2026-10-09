@@ -1,0 +1,196 @@
+name: Infrastructure
+
+# Stacks, em ordem de dependência (cada uma lê a anterior pelo SSM):
+#   network: pre → us-east-1 → sa-east-1 → post (peering)
+#   ecs:     pre → us-east-1 → sa-east-1 → post
+#
+# PR:    só plan, e só das stacks afetadas (mudar network também planeja ecs, que depende dela).
+# main:  plan + apply de TODAS as stacks. Garante que o que está na AWS converge para o que está
+#        no Git, mesmo se um run anterior foi cancelado na fila. Stack sem mudança vira "No changes".
+# Manual: escolhe a stack.
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      stack:
+        type: choice
+        description: Stacks a rodar (network sempre leva junto o ecs, que depende dela)
+        options:
+          - all
+          - ecs
+        default: all
+
+permissions:
+  contents: read
+  id-token: write # necessário para o OIDC com a AWS
+
+# Nunca dois runs mexendo nos mesmos states; um apply nunca é interrompido no meio.
+concurrency:
+  group: terraform-infrastructure
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      network: ${{ steps.detect.outputs.network }}
+      ecs: ${{ steps.detect.outputs.ecs }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Detect affected stacks
+        id: detect
+        env:
+          EVENT: ${{ github.event_name }}
+          STACK: ${{ inputs.stack }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          network=false
+          ecs=false
+
+          case "$EVENT" in
+            push)
+              network=true; ecs=true ;;
+            workflow_dispatch)
+              [ "$STACK" = "all" ] && network=true
+              ecs=true ;;
+            pull_request)
+              files=$(git diff --name-only "$BASE...$HEAD")
+              echo "Arquivos alterados:"; echo "$files"
+              if echo "$files" | grep -qE '^\.github/workflows/(infrastructure|_terraform)\.yml$'; then
+                network=true; ecs=true
+              fi
+              echo "$files" | grep -q '^network/' && { network=true; ecs=true; }
+              echo "$files" | grep -q '^ecs/' && ecs=true
+              ;;
+          esac
+
+          echo "network=$network" >> "$GITHUB_OUTPUT"
+          echo "ecs=$ecs" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Stacks"
+            echo "| Stack | Roda |"
+            echo "|---|---|"
+            echo "| network | $network |"
+            echo "| ecs | $ecs |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  fmt:
+    name: Terraform fmt
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ vars.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform fmt check
+        run: terraform fmt -check -recursive
+
+  # ---------------------------------------------------------------- network
+  network-pre:
+    name: Network pre-deployment
+    needs: [changes, fmt]
+    if: needs.changes.outputs.network == 'true'
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: network/pre-deployment
+      backend-config: environment/backend.tfvars
+      var-file: environment/terraform.tfvars
+      apply: ${{ github.event_name != 'pull_request' }}
+
+  network-us-east-1:
+    name: Network us-east-1
+    needs: [changes, network-pre]
+    if: needs.changes.outputs.network == 'true'
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: network/deployment
+      backend-config: environment/us-east-1/backend.tfvars
+      var-file: environment/us-east-1/terraform.tfvars
+      apply: ${{ github.event_name != 'pull_request' }}
+
+  network-sa-east-1:
+    name: Network sa-east-1
+    needs: [changes, network-us-east-1]
+    if: needs.changes.outputs.network == 'true'
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: network/deployment
+      backend-config: environment/sa-east-1/backend.tfvars
+      var-file: environment/sa-east-1/terraform.tfvars
+      apply: ${{ github.event_name != 'pull_request' }}
+
+  network-post:
+    name: Network post-deployment (peering)
+    needs: [changes, network-sa-east-1]
+    if: needs.changes.outputs.network == 'true'
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: network/post-deployment
+      backend-config: environment/backend.tfvars
+      var-file: environment/terraform.tfvars
+      apply: ${{ github.event_name != 'pull_request' }}
+
+  # -------------------------------------------------------------------- ecs
+  # Depende de todos os jobs da network: roda se ela passou OU se ela não precisou rodar (skipped).
+  ecs-pre:
+    name: ECS pre-deployment
+    needs: [changes, fmt, network-pre, network-us-east-1, network-sa-east-1, network-post]
+    if: ${{ !cancelled() && !failure() && needs.changes.outputs.ecs == 'true' }}
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: ecs/pre-deployment
+      backend-config: environment/backend.tfvars
+      var-file: environment/terraform.tfvars
+      apply: ${{ github.event_name != 'pull_request' }}
+
+  ecs-us-east-1:
+    name: ECS us-east-1
+    needs: [changes, ecs-pre]
+    if: ${{ !cancelled() && !failure() && needs.changes.outputs.ecs == 'true' }}
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: ecs/deployment
+      backend-config: environment/us-east-1/backend.tfvars
+      var-file: environment/us-east-1/terraform.tfvars
+      apply: ${{ github.event_name != 'pull_request' }}
+
+  ecs-sa-east-1:
+    name: ECS sa-east-1
+    needs: [changes, ecs-us-east-1]
+    if: ${{ !cancelled() && !failure() && needs.changes.outputs.ecs == 'true' }}
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: ecs/deployment
+      backend-config: environment/sa-east-1/backend.tfvars
+      var-file: environment/sa-east-1/terraform.tfvars
+      apply: ${{ github.event_name != 'pull_request' }}
+
+  ecs-post:
+    name: ECS post-deployment
+    needs: [changes, ecs-sa-east-1]
+    if: ${{ !cancelled() && !failure() && needs.changes.outputs.ecs == 'true' }}
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: ecs/post-deployment
+      backend-config: environment/backend.tfvars
+      var-file: environment/terraform.tfvars
+      apply: ${{ github.event_name != 'pull_request' }}

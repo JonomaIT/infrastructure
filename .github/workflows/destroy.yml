@@ -1,23 +1,31 @@
 name: Destroy
 
-# Destrói todo o lab multi-região. Só manual, com confirmação digitada e aprovação do Environment "destroy".
-# Ordem inversa da criação: peering primeiro (depende das VPCs), depois as regiões.
-# Para subir de novo: Run workflow no "Multiregion".
+# Destrói o lab. Só manual, com confirmação digitada e aprovação do Environment "destroy".
+# Ordem inversa da criação: ecs antes da network (load balancers e VPC Link ficam nas subnets),
+# e dentro de cada stack: post → sa-east-1 → us-east-1 → pre.
+# Para subir de novo: Run workflow no "Infrastructure".
 on:
   workflow_dispatch:
     inputs:
+      stack:
+        type: choice
+        description: "O que destruir: ecs (só o cluster) ou all (cluster e rede)"
+        options:
+          - ecs
+          - all
+        default: ecs
       confirm:
         type: string
         required: true
-        description: Digite "destroy" para confirmar a destruição de todo o ambiente
+        description: Digite "destroy" para confirmar
 
 permissions:
   contents: read
   id-token: write # necessário para o OIDC com a AWS
 
-# Mesmo grupo do Multiregion: nunca destrói enquanto um apply roda (e vice-versa).
+# Mesmo grupo do Infrastructure: nunca destrói enquanto um apply roda (e vice-versa).
 concurrency:
-  group: terraform-multiregion
+  group: terraform-infrastructure
   cancel-in-progress: false
 
 jobs:
@@ -41,54 +49,101 @@ jobs:
           fi
 
   approve:
-    name: Approve destroy
+    name: Approve destroy (${{ inputs.stack }})
     needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: destroy # required reviewers: o job espera aprovação antes de rodar
     steps:
       - name: Approved
-        run: echo "Destroy aprovado por ${{ github.actor }}" >> "$GITHUB_STEP_SUMMARY"
+        run: echo "Destroy de '${{ inputs.stack }}' aprovado por ${{ github.actor }}" >> "$GITHUB_STEP_SUMMARY"
 
-  post-deployment:
-    name: Post-deployment (peering)
+  # -------------------------------------------------------------------- ecs
+  ecs-post:
+    name: ECS post-deployment
     needs: approve
     uses: ./.github/workflows/_terraform.yml
     with:
-      working-directory: post-deployment
+      working-directory: ecs/post-deployment
       backend-config: environment/backend.tfvars
       var-file: environment/terraform.tfvars
       apply: true
       destroy: true
 
-  sa-east-1:
-    name: Deployment sa-east-1
-    needs: post-deployment
+  ecs-sa-east-1:
+    name: ECS sa-east-1
+    needs: ecs-post
     uses: ./.github/workflows/_terraform.yml
     with:
-      working-directory: deployment
+      working-directory: ecs/deployment
       backend-config: environment/sa-east-1/backend.tfvars
       var-file: environment/sa-east-1/terraform.tfvars
       apply: true
       destroy: true
 
-  us-east-1:
-    name: Deployment us-east-1
-    needs: sa-east-1
+  ecs-us-east-1:
+    name: ECS us-east-1
+    needs: ecs-sa-east-1
     uses: ./.github/workflows/_terraform.yml
     with:
-      working-directory: deployment
+      working-directory: ecs/deployment
       backend-config: environment/us-east-1/backend.tfvars
       var-file: environment/us-east-1/terraform.tfvars
       apply: true
       destroy: true
 
-  pre-deployment:
-    name: Pre-deployment
-    needs: us-east-1
+  ecs-pre:
+    name: ECS pre-deployment
+    needs: ecs-us-east-1
     uses: ./.github/workflows/_terraform.yml
     with:
-      working-directory: pre-deployment
+      working-directory: ecs/pre-deployment
+      backend-config: environment/backend.tfvars
+      var-file: environment/terraform.tfvars
+      apply: true
+      destroy: true
+
+  # ---------------------------------------------------------------- network
+  network-post:
+    name: Network post-deployment (peering)
+    needs: ecs-pre
+    if: inputs.stack == 'all'
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: network/post-deployment
+      backend-config: environment/backend.tfvars
+      var-file: environment/terraform.tfvars
+      apply: true
+      destroy: true
+
+  network-sa-east-1:
+    name: Network sa-east-1
+    needs: network-post
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: network/deployment
+      backend-config: environment/sa-east-1/backend.tfvars
+      var-file: environment/sa-east-1/terraform.tfvars
+      apply: true
+      destroy: true
+
+  network-us-east-1:
+    name: Network us-east-1
+    needs: network-sa-east-1
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: network/deployment
+      backend-config: environment/us-east-1/backend.tfvars
+      var-file: environment/us-east-1/terraform.tfvars
+      apply: true
+      destroy: true
+
+  network-pre:
+    name: Network pre-deployment
+    needs: network-us-east-1
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: network/pre-deployment
       backend-config: environment/backend.tfvars
       var-file: environment/terraform.tfvars
       apply: true

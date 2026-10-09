@@ -28,7 +28,7 @@ variable "state_bucket" {
   description = "Bucket S3 onde ficam os states do Terraform"
 }
 
-variable "ssm_prefix" {
-  type        = string
-  description = "Prefixo dos parâmetros SSM que a pipeline pode gerenciar (ex: /jonomait-multiregion)"
+variable "ssm_prefixes" {
+  type        = list(string)
+  description = "Prefixos dos parâmetros SSM que a pipeline pode gerenciar, um por stack (ex: /jonomait-multiregion)"
 }

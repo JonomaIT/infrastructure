@@ -61,7 +61,9 @@ data "aws_iam_policy_document" "pipeline" {
       "ssm:RemoveTagsFromResource",
       "ssm:ListTagsForResource",
     ]
-    resources = ["arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter${var.ssm_prefix}/*"]
+    resources = [
+      for prefix in var.ssm_prefixes : "arn:aws:ssm:*:${data.aws_caller_identity.current.account_id}:parameter${prefix}/*"
+    ]
   }
 
   statement {
@@ -81,5 +83,105 @@ data "aws_iam_policy_document" "pipeline" {
     sid       = "EipAttributesWrite"
     actions   = ["ec2:ModifyAddressAttribute", "ec2:ResetAddressAttribute"]
     resources = ["arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:elastic-ip/*"]
+  }
+}
+
+# Stack ecs: cluster, load balancers, Cloud Map, zona privada e VPC Link do API Gateway.
+data "aws_iam_policy_document" "ecs" {
+  statement {
+    sid = "EcsCluster"
+    actions = [
+      "ecs:CreateCluster",
+      "ecs:DeleteCluster",
+      "ecs:DescribeClusters",
+      "ecs:UpdateCluster",
+      "ecs:UpdateClusterSettings",
+      "ecs:PutClusterCapacityProviders",
+      "ecs:TagResource",
+      "ecs:UntagResource",
+      "ecs:ListTagsForResource",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "LoadBalancers"
+    actions = [
+      "elasticloadbalancing:Create*",
+      "elasticloadbalancing:Delete*",
+      "elasticloadbalancing:Describe*",
+      "elasticloadbalancing:Modify*",
+      "elasticloadbalancing:Set*",
+      "elasticloadbalancing:AddTags",
+      "elasticloadbalancing:RemoveTags",
+      "elasticloadbalancing:RegisterTargets",
+      "elasticloadbalancing:DeregisterTargets",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "CloudMap"
+    actions = [
+      "servicediscovery:CreatePrivateDnsNamespace",
+      "servicediscovery:UpdatePrivateDnsNamespace",
+      "servicediscovery:DeleteNamespace",
+      "servicediscovery:GetNamespace",
+      "servicediscovery:ListNamespaces",
+      "servicediscovery:GetOperation",
+      "servicediscovery:ListOperations",
+      "servicediscovery:TagResource",
+      "servicediscovery:UntagResource",
+      "servicediscovery:ListTagsForResource",
+    ]
+    resources = ["*"]
+  }
+
+  # Zona privada própria e as zonas que o Cloud Map cria por baixo dos namespaces.
+  statement {
+    sid = "Route53PrivateZones"
+    actions = [
+      "route53:CreateHostedZone",
+      "route53:DeleteHostedZone",
+      "route53:GetHostedZone",
+      "route53:ListHostedZones",
+      "route53:ListHostedZonesByName",
+      "route53:UpdateHostedZoneComment",
+      "route53:ChangeResourceRecordSets",
+      "route53:ListResourceRecordSets",
+      "route53:GetChange",
+      "route53:AssociateVPCWithHostedZone",
+      "route53:DisassociateVPCFromHostedZone",
+      "route53:ChangeTagsForResource",
+      "route53:ListTagsForResource",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid     = "ApiGatewayVpcLinks"
+    actions = ["apigateway:GET", "apigateway:POST", "apigateway:PATCH", "apigateway:DELETE", "apigateway:PUT"]
+    resources = [
+      "arn:aws:apigateway:*::/vpclinks",
+      "arn:aws:apigateway:*::/vpclinks/*",
+      "arn:aws:apigateway:*::/tags/*",
+    ]
+  }
+
+  # Na primeira vez em cada conta, ECS, ELB e API Gateway criam a própria service-linked role.
+  statement {
+    sid       = "ServiceLinkedRoles"
+    actions   = ["iam:CreateServiceLinkedRole"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:AWSServiceName"
+      values = [
+        "ecs.amazonaws.com",
+        "elasticloadbalancing.amazonaws.com",
+        "ops.apigateway.amazonaws.com",
+      ]
+    }
   }
 }

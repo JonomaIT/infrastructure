@@ -1,30 +1,30 @@
 name: _terraform
 
-# Uso interno: roda init → validate → plan de um componente e, se pedido, aplica o MESMO plan salvo.
-# Com destroy: true o plan é de destruição (-destroy); o apply continua sendo do plan salvo.
+# Internal use: runs init → validate → plan for one component and, if requested, applies that SAME saved plan.
+# With destroy: true the plan is a destroy plan (-destroy); the apply still uses the saved plan.
 on:
   workflow_call:
     inputs:
       working-directory:
         type: string
         required: true
-        description: Pasta do componente Terraform (ex. deployment)
+        description: Terraform component directory (e.g. network/deployment)
       backend-config:
         type: string
         required: true
-        description: Arquivo de backend, relativo ao componente
+        description: Backend config file, relative to the component
       var-file:
         type: string
         required: true
-        description: Arquivo de variáveis, relativo ao componente
+        description: Variables file, relative to the component
       apply:
         type: boolean
         default: false
-        description: Aplica o plan gerado neste job
+        description: Apply the plan generated in this job
       destroy:
         type: boolean
         default: false
-        description: Gera um plan de destruição (usado só pelo destroy.yml)
+        description: Generate a destroy plan (used only by destroy.yml)
 
 jobs:
   terraform:
@@ -47,8 +47,8 @@ jobs:
           terraform_version: ${{ vars.TERRAFORM_VERSION }}
           terraform_wrapper: false
 
-      # Sem access key: o GitHub emite um token OIDC e a AWS troca por credenciais temporárias.
-      # Role por convenção de nome: github-actions-<repo> (criada no componente bootstrap).
+      # No access keys: GitHub issues an OIDC token and AWS exchanges it for temporary credentials.
+      # Role found by naming convention: github-actions-<repo> (created by the bootstrap component).
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
@@ -73,7 +73,7 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # Aplica exatamente o plan revisado acima; se o state mudou no meio, o Terraform recusa.
+      # Applies exactly the plan reviewed above; if the state changed in between, Terraform refuses it.
       - name: Terraform apply
         if: inputs.apply
         run: terraform apply tfplan

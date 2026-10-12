@@ -1,19 +1,19 @@
 variable "region" {
   type        = string
-  description = "Região da VPC que solicita o peering (requester)"
+  description = "Region of the VPC requesting the peering (requester)"
 }
 
 variable "region_peer" {
   type        = string
-  description = "Região da VPC que aceita o peering (accepter)"
+  description = "Region of the VPC accepting the peering (accepter)"
 }
 
 variable "vpc_ssm" {
   type        = string
-  description = "Parâmetro SSM com o ID da VPC requester"
+  description = "SSM parameter with the requester VPC ID"
 }
 
 variable "vpc_ssm_peer" {
   type        = string
-  description = "Parâmetro SSM com o ID da VPC accepter"
+  description = "SSM parameter with the accepter VPC ID"
 }

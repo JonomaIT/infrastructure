@@ -1,4 +1,4 @@
-# O OIDC provider do GitHub já existe na conta (é um por conta), então só é lido aqui.
+# The GitHub OIDC provider already exists in the account (one per account), so it is only read here.
 data "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
 }
@@ -20,13 +20,13 @@ data "aws_iam_policy_document" "trust" {
       values   = ["sts.amazonaws.com"]
     }
 
-    # Só a main (apply) e PRs (plan) deste repo. Nenhum outro repo ou branch assume a role.
+    # Only main (apply) and PRs (plan) of this repo. No other repo or branch can assume the role.
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      # Dois formatos de sub: o imutável (com IDs numéricos, usado quando o repo tem
-      # use_immutable_subject = true) e o clássico (só nomes). O imutável não é enganado
-      # por um repo/org recriado com o mesmo nome.
+      # Two sub formats: the immutable one (with numeric IDs, used when the repo has
+      # use_immutable_subject = true) and the classic one (names only). The immutable one
+      # cannot be fooled by a repo/org recreated with the same name.
       values = [
         "repo:${var.github_org}@${var.github_org_id}/${var.github_repo}@${var.github_repo_id}:ref:refs/heads/main",
         "repo:${var.github_org}@${var.github_org_id}/${var.github_repo}@${var.github_repo_id}:pull_request",
@@ -72,7 +72,7 @@ data "aws_iam_policy_document" "pipeline" {
     resources = ["*"]
   }
 
-  # O provider AWS 6.x lê o atributo de DNS reverso de todo EIP; a AmazonVPCFullAccess não cobre.
+  # AWS provider 6.x reads the reverse DNS attribute of every EIP; AmazonVPCFullAccess does not cover it.
   statement {
     sid       = "EipAttributesRead"
     actions   = ["ec2:DescribeAddressesAttribute"]
@@ -86,7 +86,7 @@ data "aws_iam_policy_document" "pipeline" {
   }
 }
 
-# Stack ecs: cluster, load balancers, Cloud Map, zona privada e VPC Link do API Gateway.
+# ecs stack: cluster, load balancers, Cloud Map, private zone and API Gateway VPC Link.
 data "aws_iam_policy_document" "ecs" {
   statement {
     sid = "EcsCluster"
@@ -137,7 +137,7 @@ data "aws_iam_policy_document" "ecs" {
     resources = ["*"]
   }
 
-  # Zona privada própria e as zonas que o Cloud Map cria por baixo dos namespaces.
+  # The stack's own private zone and the zones Cloud Map creates behind its namespaces.
   statement {
     sid = "Route53PrivateZones"
     actions = [
@@ -168,7 +168,7 @@ data "aws_iam_policy_document" "ecs" {
     ]
   }
 
-  # Na primeira vez em cada conta, ECS, ELB e API Gateway criam a própria service-linked role.
+  # The first time in each account, ECS, ELB and API Gateway create their own service-linked role.
   statement {
     sid       = "ServiceLinkedRoles"
     actions   = ["iam:CreateServiceLinkedRole"]

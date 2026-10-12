@@ -1,13 +1,13 @@
 name: Infrastructure
 
-# Stacks, em ordem de dependência (cada uma lê a anterior pelo SSM):
+# Stacks, in dependency order (each one reads the previous one through SSM):
 #   network: pre → us-east-1 → sa-east-1 → post (peering)
 #   ecs:     pre → us-east-1 → sa-east-1 → post
 #
-# PR:    só plan, e só das stacks afetadas (mudar network também planeja ecs, que depende dela).
-# main:  plan + apply de TODAS as stacks. Garante que o que está na AWS converge para o que está
-#        no Git, mesmo se um run anterior foi cancelado na fila. Stack sem mudança vira "No changes".
-# Manual: escolhe a stack.
+# PR:     plan only, and only for the affected stacks (a network change also plans ecs, which depends on it).
+# main:   plan + apply of ALL stacks. Guarantees that AWS converges to what is in Git, even if a
+#         previous run was cancelled in the queue. Unchanged stacks just report "No changes".
+# Manual: pick the stack.
 on:
   pull_request:
     branches:
@@ -19,7 +19,7 @@ on:
     inputs:
       stack:
         type: choice
-        description: Stacks a rodar (network sempre leva junto o ecs, que depende dela)
+        description: Stacks to run (network always brings ecs along, since ecs depends on it)
         options:
           - all
           - ecs
@@ -27,9 +27,9 @@ on:
 
 permissions:
   contents: read
-  id-token: write # necessário para o OIDC com a AWS
+  id-token: write # required for OIDC with AWS
 
-# Nunca dois runs mexendo nos mesmos states; um apply nunca é interrompido no meio.
+# Never two runs touching the same states; an apply is never interrupted halfway.
 concurrency:
   group: terraform-infrastructure
   cancel-in-progress: false
@@ -68,7 +68,7 @@ jobs:
               ecs=true ;;
             pull_request)
               files=$(git diff --name-only "$BASE...$HEAD")
-              echo "Arquivos alterados:"; echo "$files"
+              echo "Changed files:"; echo "$files"
               if echo "$files" | grep -qE '^\.github/workflows/(infrastructure|_terraform)\.yml$'; then
                 network=true; ecs=true
               fi
@@ -81,7 +81,7 @@ jobs:
           echo "ecs=$ecs" >> "$GITHUB_OUTPUT"
           {
             echo "### Stacks"
-            echo "| Stack | Roda |"
+            echo "| Stack | Runs |"
             echo "|---|---|"
             echo "| network | $network |"
             echo "| ecs | $ecs |"
@@ -150,7 +150,7 @@ jobs:
       apply: ${{ github.event_name != 'pull_request' }}
 
   # -------------------------------------------------------------------- ecs
-  # Depende de todos os jobs da network: roda se ela passou OU se ela não precisou rodar (skipped).
+  # Depends on every network job: runs if network succeeded OR did not need to run (skipped).
   ecs-pre:
     name: ECS pre-deployment
     needs: [changes, fmt, network-pre, network-us-east-1, network-sa-east-1, network-post]

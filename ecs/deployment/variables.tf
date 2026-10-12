@@ -1,24 +1,24 @@
 variable "project_name" {
   type        = string
-  description = "Nome do projeto do cluster. Prefixo dos recursos e dos parâmetros SSM (ex: jonomait-ecs)"
+  description = "Cluster project name. Prefix for resources and SSM parameters (e.g. jonomait-ecs)"
 }
 
 variable "region" {
   type        = string
-  description = "Região AWS onde o cluster é criado"
+  description = "AWS region where the cluster is created"
 }
 
 variable "ssm_vpc_id" {
   type        = string
-  description = "Parâmetro SSM com o ID da VPC, publicado pela stack network"
+  description = "SSM parameter with the VPC ID, published by the network stack"
 }
 
 variable "ssm_private_subnets" {
   type        = list(string)
-  description = "Parâmetros SSM com os IDs das subnets privadas, publicados pela stack network"
+  description = "SSM parameters with the private subnet IDs, published by the network stack"
 }
 
 variable "ssm_public_subnets" {
   type        = list(string)
-  description = "Parâmetros SSM com os IDs das subnets públicas, publicados pela stack network"
+  description = "SSM parameters with the public subnet IDs, published by the network stack"
 }

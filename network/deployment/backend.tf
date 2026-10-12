@@ -1,5 +1,5 @@
 terraform {
   backend "s3" {
-    use_lockfile = true # lock nativo no S3 (Terraform >= 1.10)
+    use_lockfile = true # native S3 state locking (Terraform >= 1.10)
   }
 }

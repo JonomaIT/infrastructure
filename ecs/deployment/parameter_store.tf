@@ -1,5 +1,5 @@
-# Publica no SSM o que os serviços vão precisar do cluster, por convenção de nome:
-# /<project_name>/<recurso>/... Assim ninguém lê o state desta stack.
+# Publishes to SSM what services will need from the cluster, by naming convention:
+# /<project_name>/<resource>/... so nobody has to read this stack's state.
 resource "aws_ssm_parameter" "cluster_name" {
   type  = "String"
   name  = format("/%s/cluster/name", var.project_name)

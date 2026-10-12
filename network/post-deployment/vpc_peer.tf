@@ -51,8 +51,8 @@ resource "aws_vpc_peering_connection_options" "accepter" {
     aws_vpc_peering_connection_accepter.peer
   ]
 }
-# Peering não cria rota sozinho: cada lado precisa saber que o CIDR do outro sai pelo pcx.
-# Usa o id do accepter para a rota só ser criada depois que o peering estiver ativo.
+# Peering does not create routes on its own: each side must route the other's CIDR through the pcx.
+# Uses the accepter's id so the route is only created once the peering is active.
 resource "aws_route" "to_peer" {
   for_each = toset(data.aws_route_tables.vpc.ids)
 

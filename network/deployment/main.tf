@@ -1,6 +1,6 @@
 module "vpc" {
 
-  source = "git::https://github.com/JonomaIT/terraform-modules.git//vpc?ref=v0.3.0"
+  source = "git::https://github.com/JonomaIT/terraform-modules.git//vpc?ref=v0.3.1"
 
   project_name = var.project_name
 

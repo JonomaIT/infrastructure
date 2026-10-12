@@ -38,7 +38,7 @@ Each component has its own state in the `jonomait-statefiles` bucket, with nativ
 - The apply runs exactly the plan generated in the same job.
 - Actions pinned by SHA; Terraform version from the `TERRAFORM_VERSION` org variable.
 - Org variables used: `AWS_ACCOUNT_ID`, `AWS_REGION`, `TERRAFORM_VERSION`.
-- Org secret used: `CLOUDFLARE_API_TOKEN_JONOMA` (Cloudflare `Zone:Read` + `DNS:Edit` on `joshuel.com.br`), passed only to `ecs/pre-deployment` and `routing/post-deployment` as `CLOUDFLARE_API_TOKEN`.
+- Org secret used: `CLOUDFLARE_API_TOKEN_JONOMA` (Cloudflare `Zone:Read`, `DNS:Edit` and `Zone Settings:Edit` on `joshuel.com.br`), passed only to the components that manage Cloudflare (`ecs/pre-deployment`, `routing/pre-deployment`, `routing/post-deployment`) as `CLOUDFLARE_API_TOKEN`.
 
 ## Bootstrap
 
@@ -60,7 +60,7 @@ A new stack that writes to SSM or uses a new AWS service needs its permissions a
 2. `confirm`: type `destroy`.
 3. Approve the **Approve destroy** job (`destroy` Environment, with a required reviewer).
 
-Order: `routing → ecs → network` (Global Accelerator points at the ecs NLBs; load balancers and the VPC Link sit in the network subnets) and, within each stack, `post → regions → pre`. `bootstrap` is never destroyed by the pipeline.
+Order: `routing → ecs → network` (Global Accelerator points at the ecs NLBs; load balancers and the VPC Link sit in the network subnets) and, within each stack, `post → regions → pre`. `bootstrap` and `routing/pre-deployment` (Cloudflare zone TLS settings) are never destroyed by the pipeline: they cost nothing, and destroying the zone settings would revert the zone to weaker TLS while the lab is down.
 
 To bring everything back up: `Actions → Infrastructure → Run workflow`.
 

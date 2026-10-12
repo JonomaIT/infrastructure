@@ -224,6 +224,8 @@ jobs:
       backend-config: environment/backend.tfvars
       var-file: environment/terraform.tfvars
       apply: ${{ github.event_name != 'pull_request' }}
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_JONOMA }}
 
   routing-post:
     name: Routing post-deployment (Global Accelerator)

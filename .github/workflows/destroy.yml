@@ -4,6 +4,8 @@ name: Destroy
 # Reverse creation order: routing → ecs → network (Global Accelerator points at the ecs NLBs, and the
 # load balancers and VPC Link live in the network subnets). Within each stack: post → regions → pre.
 # Each option also removes everything that depends on it: ecs takes routing along, all takes everything.
+# Never destroyed here: bootstrap and routing/pre-deployment (Cloudflare zone TLS settings). They cost
+# nothing, and destroying the zone settings would revert the zone to weaker TLS while the lab is down.
 # To bring it back up: Run workflow on "Infrastructure".
 on:
   workflow_dispatch:
@@ -74,21 +76,10 @@ jobs:
     secrets:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_JONOMA }}
 
-  routing-pre:
-    name: Routing pre-deployment
-    needs: routing-post
-    uses: ./.github/workflows/_terraform.yml
-    with:
-      working-directory: routing/pre-deployment
-      backend-config: environment/backend.tfvars
-      var-file: environment/terraform.tfvars
-      apply: true
-      destroy: true
-
   # -------------------------------------------------------------------- ecs
   ecs-post:
     name: ECS post-deployment
-    needs: routing-pre
+    needs: routing-post
     if: inputs.stack == 'ecs' || inputs.stack == 'all'
     uses: ./.github/workflows/_terraform.yml
     with:

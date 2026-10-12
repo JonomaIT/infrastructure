@@ -22,3 +22,9 @@ variable "ssm_public_subnets" {
   type        = list(string)
   description = "SSM parameters with the public subnet IDs, published by the network stack"
 }
+
+variable "ssm_acm_certs" {
+  type        = list(string)
+  description = "SSM parameters with ACM certificate ARNs, published by ecs/pre-deployment. Empty = HTTP only"
+  default     = []
+}

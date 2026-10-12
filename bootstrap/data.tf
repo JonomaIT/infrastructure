@@ -104,6 +104,21 @@ data "aws_iam_policy_document" "ecs" {
     resources = ["*"]
   }
 
+  # Certificates requested by ecs/pre-deployment (validated through Cloudflare DNS).
+  statement {
+    sid = "AcmCertificates"
+    actions = [
+      "acm:RequestCertificate",
+      "acm:DescribeCertificate",
+      "acm:DeleteCertificate",
+      "acm:ListCertificates",
+      "acm:ListTagsForCertificate",
+      "acm:AddTagsToCertificate",
+      "acm:RemoveTagsFromCertificate",
+    ]
+    resources = ["*"]
+  }
+
   statement {
     sid = "LoadBalancers"
     actions = [

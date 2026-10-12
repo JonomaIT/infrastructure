@@ -18,8 +18,8 @@ bootstrap/                    ← GitHub Actions role (applied manually)
 | Stack | Creates | Publishes to SSM | Reads from SSM |
 |---|---|---|---|
 | `network` | VPC, subnets, one NAT per AZ, cross-region peering with routes | `/jonomait-multiregion/vpc/...` | — |
-| `ecs` | ECS cluster, external ALB, internal ALB, `jonomait-ecs.internal` zone, Cloud Map, internal NLB + VPC Link | `/jonomait-ecs/...` | `/jonomait-multiregion/vpc/...` |
-| `routing` | Global Accelerator (2 static anycast IPs) with one endpoint group per region pointing at the ecs NLB; optional Route 53 name | — | `/jonomait-ecs/vpc-link/nlb-arn` (both regions) |
+| `ecs` | `pre-deployment`: ACM `*.joshuel.com.br` in both regions, validated through Cloudflare DNS. `deployment`: ECS cluster, external ALB, internal ALB (HTTP + HTTPS), `jonomait-ecs.internal` zone, Cloud Map, internal NLB + VPC Link | `/jonomait-ecs/...` (incl. `/jonomait-ecs/acm/arn` per region) | `/jonomait-multiregion/vpc/...` |
+| `routing` | Global Accelerator (2 static anycast IPs) with one endpoint group per region pointing at the ecs NLB, and the public name `multiregion.joshuel.com.br` in Cloudflare | — | `/jonomait-ecs/vpc-link/nlb-arn` (both regions) |
 
 A stack never reads another stack's state: everything shared goes through SSM, by naming convention.
 
@@ -38,6 +38,7 @@ Each component has its own state in the `jonomait-statefiles` bucket, with nativ
 - The apply runs exactly the plan generated in the same job.
 - Actions pinned by SHA; Terraform version from the `TERRAFORM_VERSION` org variable.
 - Org variables used: `AWS_ACCOUNT_ID`, `AWS_REGION`, `TERRAFORM_VERSION`.
+- Org secret used: `CLOUDFLARE_API_TOKEN_JONOMA` (Cloudflare `Zone:Read` + `DNS:Edit` on `joshuel.com.br`), passed only to `ecs/pre-deployment` and `routing/post-deployment` as `CLOUDFLARE_API_TOKEN`.
 
 ## Bootstrap
 
@@ -74,7 +75,17 @@ routing = {
 }
 ```
 
-`100/0` is active-passive. To fail over, swap it to `0/100` and merge; `50/50` splits traffic (active-active). Until a service is deployed, each ALB answers `200` with `jonomait-ecs - <region>`, so `curl http://<accelerator DNS>` shows which region served the request.
+`100/0` is active-passive. To fail over, swap it to `0/100` and apply; `50/50` splits traffic (active-active). Until a service is deployed, each ALB answers `200` with `jonomait-ecs - <region>`, so `curl https://multiregion.joshuel.com.br` shows which region served the request.
+
+## Cloudflare
+
+`ecs/pre-deployment` (certificate validation records) and `routing/post-deployment` (public CNAME) use the Cloudflare provider. It reads the token from `CLOUDFLARE_API_TOKEN`, so the token never goes through tfvars or the state. Locally, export it before running those two components:
+
+```bash
+export CLOUDFLARE_API_TOKEN='...'
+```
+
+The public record is DNS only (`cloudflare_proxied = false`): clients reach the accelerator directly, so failover follows the traffic dial. Setting it to `true` puts Cloudflare's proxy (WAF, cache) in front and requires the zone SSL mode to be Full (strict).
 
 ## Running locally
 

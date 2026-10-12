@@ -11,6 +11,6 @@ routing = {
   secondary = 0
 }
 
-# No public domain in AWS yet: the accelerator is reached through its own DNS name / static IPs.
-# route53_hosted_zone = "Z0000000000000"
-# dns_name            = "app.example.com"
+# Public name in Cloudflare (DNS only, see cloudflare.tf). Covered by the *.joshuel.com.br certificate.
+cloudflare_zone = "joshuel.com.br"
+dns_name        = "multiregion.joshuel.com.br"

@@ -38,14 +38,18 @@ variable "routing" {
   }
 }
 
-variable "route53_hosted_zone" {
+variable "cloudflare_zone" {
   type        = string
-  description = "Route 53 public hosted zone ID for the optional DNS name (null = no record)"
-  default     = null
+  description = "Cloudflare zone for the public name (e.g. joshuel.com.br); the zone id is looked up from it"
 }
 
 variable "dns_name" {
   type        = string
-  description = "Optional public DNS name for the accelerator, inside route53_hosted_zone (null = no record)"
-  default     = null
+  description = "Public name pointing to the accelerator, inside cloudflare_zone (e.g. multiregion.joshuel.com.br)"
+}
+
+variable "cloudflare_proxied" {
+  type        = bool
+  description = "Put Cloudflare's proxy in front of the accelerator (false = DNS only)"
+  default     = false
 }

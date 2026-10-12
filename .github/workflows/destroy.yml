@@ -71,6 +71,8 @@ jobs:
       var-file: environment/terraform.tfvars
       apply: true
       destroy: true
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_JONOMA }}
 
   routing-pre:
     name: Routing pre-deployment
@@ -128,6 +130,8 @@ jobs:
       var-file: environment/terraform.tfvars
       apply: true
       destroy: true
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_JONOMA }}
 
   # ---------------------------------------------------------------- network
   network-post:

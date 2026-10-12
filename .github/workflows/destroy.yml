@@ -1,19 +1,21 @@
 name: Destroy
 
 # Tears the lab down. Manual only, with a typed confirmation and approval through the "destroy" Environment.
-# Reverse creation order: ecs before network (load balancers and the VPC Link live in the subnets),
-# and within each stack: post → sa-east-1 → us-east-1 → pre.
+# Reverse creation order: routing → ecs → network (Global Accelerator points at the ecs NLBs, and the
+# load balancers and VPC Link live in the network subnets). Within each stack: post → regions → pre.
+# Each option also removes everything that depends on it: ecs takes routing along, all takes everything.
 # To bring it back up: Run workflow on "Infrastructure".
 on:
   workflow_dispatch:
     inputs:
       stack:
         type: choice
-        description: "What to destroy: ecs (cluster only) or all (cluster and network)"
+        description: "What to destroy: routing (Global Accelerator), ecs (routing + cluster) or all (everything)"
         options:
+          - routing
           - ecs
           - all
-        default: ecs
+        default: routing
       confirm:
         type: string
         required: true
@@ -58,10 +60,34 @@ jobs:
       - name: Approved
         run: echo "Destroy of '${{ inputs.stack }}' approved by ${{ github.actor }}" >> "$GITHUB_STEP_SUMMARY"
 
+  # ---------------------------------------------------------------- routing
+  routing-post:
+    name: Routing post-deployment (Global Accelerator)
+    needs: approve
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: routing/post-deployment
+      backend-config: environment/backend.tfvars
+      var-file: environment/terraform.tfvars
+      apply: true
+      destroy: true
+
+  routing-pre:
+    name: Routing pre-deployment
+    needs: routing-post
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: routing/pre-deployment
+      backend-config: environment/backend.tfvars
+      var-file: environment/terraform.tfvars
+      apply: true
+      destroy: true
+
   # -------------------------------------------------------------------- ecs
   ecs-post:
     name: ECS post-deployment
-    needs: approve
+    needs: routing-pre
+    if: inputs.stack == 'ecs' || inputs.stack == 'all'
     uses: ./.github/workflows/_terraform.yml
     with:
       working-directory: ecs/post-deployment

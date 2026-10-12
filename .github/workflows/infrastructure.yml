@@ -3,8 +3,10 @@ name: Infrastructure
 # Stacks, in dependency order (each one reads the previous one through SSM):
 #   network: pre → us-east-1 → sa-east-1 → post (peering)
 #   ecs:     pre → us-east-1 → sa-east-1 → post
+#   routing: pre → post (Global Accelerator in front of both regions)
 #
-# PR:     plan only, and only for the affected stacks (a network change also plans ecs, which depends on it).
+# PR:     plan only, and only for the affected stacks plus everything downstream of them
+#         (network → ecs → routing).
 # main:   plan + apply of ALL stacks. Guarantees that AWS converges to what is in Git, even if a
 #         previous run was cancelled in the queue. Unchanged stacks just report "No changes".
 # Manual: pick the stack.
@@ -19,10 +21,11 @@ on:
     inputs:
       stack:
         type: choice
-        description: Stacks to run (network always brings ecs along, since ecs depends on it)
+        description: Stack to start from (downstream stacks always run too - all = network → ecs → routing)
         options:
           - all
           - ecs
+          - routing
         default: all
 
 permissions:
@@ -42,6 +45,7 @@ jobs:
     outputs:
       network: ${{ steps.detect.outputs.network }}
       ecs: ${{ steps.detect.outputs.ecs }}
+      routing: ${{ steps.detect.outputs.routing }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -59,32 +63,43 @@ jobs:
           set -euo pipefail
           network=false
           ecs=false
+          routing=false
 
+          # Each stack also triggers everything downstream: network → ecs → routing.
           case "$EVENT" in
             push)
-              network=true; ecs=true ;;
+              network=true; ecs=true; routing=true ;;
             workflow_dispatch)
-              [ "$STACK" = "all" ] && network=true
-              ecs=true ;;
+              case "$STACK" in
+                all)     network=true; ecs=true; routing=true ;;
+                ecs)     ecs=true; routing=true ;;
+                routing) routing=true ;;
+              esac
+              ;;
             pull_request)
               files=$(git diff --name-only "$BASE...$HEAD")
               echo "Changed files:"; echo "$files"
               if echo "$files" | grep -qE '^\.github/workflows/(infrastructure|_terraform)\.yml$'; then
-                network=true; ecs=true
+                network=true; ecs=true; routing=true
               fi
-              echo "$files" | grep -q '^network/' && { network=true; ecs=true; }
-              echo "$files" | grep -q '^ecs/' && ecs=true
+              if echo "$files" | grep -q '^network/'; then network=true; ecs=true; routing=true; fi
+              if echo "$files" | grep -q '^ecs/'; then ecs=true; routing=true; fi
+              if echo "$files" | grep -q '^routing/'; then routing=true; fi
               ;;
           esac
 
-          echo "network=$network" >> "$GITHUB_OUTPUT"
-          echo "ecs=$ecs" >> "$GITHUB_OUTPUT"
+          {
+            echo "network=$network"
+            echo "ecs=$ecs"
+            echo "routing=$routing"
+          } >> "$GITHUB_OUTPUT"
           {
             echo "### Stacks"
             echo "| Stack | Runs |"
             echo "|---|---|"
             echo "| network | $network |"
             echo "| ecs | $ecs |"
+            echo "| routing | $routing |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   fmt:
@@ -191,6 +206,30 @@ jobs:
     uses: ./.github/workflows/_terraform.yml
     with:
       working-directory: ecs/post-deployment
+      backend-config: environment/backend.tfvars
+      var-file: environment/terraform.tfvars
+      apply: ${{ github.event_name != 'pull_request' }}
+
+  # ---------------------------------------------------------------- routing
+  # Depends on every network and ecs job: runs if they succeeded OR did not need to run (skipped).
+  routing-pre:
+    name: Routing pre-deployment
+    needs: [changes, fmt, network-pre, network-us-east-1, network-sa-east-1, network-post, ecs-pre, ecs-us-east-1, ecs-sa-east-1, ecs-post]
+    if: ${{ !cancelled() && !failure() && needs.changes.outputs.routing == 'true' }}
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: routing/pre-deployment
+      backend-config: environment/backend.tfvars
+      var-file: environment/terraform.tfvars
+      apply: ${{ github.event_name != 'pull_request' }}
+
+  routing-post:
+    name: Routing post-deployment (Global Accelerator)
+    needs: [changes, routing-pre]
+    if: ${{ !cancelled() && !failure() && needs.changes.outputs.routing == 'true' }}
+    uses: ./.github/workflows/_terraform.yml
+    with:
+      working-directory: routing/post-deployment
       backend-config: environment/backend.tfvars
       var-file: environment/terraform.tfvars
       apply: ${{ github.event_name != 'pull_request' }}

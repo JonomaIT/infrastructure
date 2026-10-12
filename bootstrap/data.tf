@@ -185,3 +185,35 @@ data "aws_iam_policy_document" "ecs" {
     }
   }
 }
+
+# routing stack: Global Accelerator in front of both regions (Route 53 records are covered above).
+data "aws_iam_policy_document" "routing" {
+  statement {
+    sid = "GlobalAccelerator"
+    actions = [
+      "globalaccelerator:Create*",
+      "globalaccelerator:Update*",
+      "globalaccelerator:Delete*",
+      "globalaccelerator:Describe*",
+      "globalaccelerator:List*",
+      "globalaccelerator:AddEndpoints",
+      "globalaccelerator:RemoveEndpoints",
+      "globalaccelerator:TagResource",
+      "globalaccelerator:UntagResource",
+    ]
+    resources = ["*"]
+  }
+
+  # The first accelerator in the account creates Global Accelerator's service-linked role.
+  statement {
+    sid       = "GlobalAcceleratorServiceLinkedRole"
+    actions   = ["iam:CreateServiceLinkedRole"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:AWSServiceName"
+      values   = ["globalaccelerator.amazonaws.com"]
+    }
+  }
+}

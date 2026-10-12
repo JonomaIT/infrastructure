@@ -176,6 +176,8 @@ jobs:
       backend-config: environment/backend.tfvars
       var-file: environment/terraform.tfvars
       apply: ${{ github.event_name != 'pull_request' }}
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_JONOMA }}
 
   ecs-us-east-1:
     name: ECS us-east-1
@@ -222,6 +224,8 @@ jobs:
       backend-config: environment/backend.tfvars
       var-file: environment/terraform.tfvars
       apply: ${{ github.event_name != 'pull_request' }}
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_JONOMA }}
 
   routing-post:
     name: Routing post-deployment (Global Accelerator)
@@ -233,3 +237,5 @@ jobs:
       backend-config: environment/backend.tfvars
       var-file: environment/terraform.tfvars
       apply: ${{ github.event_name != 'pull_request' }}
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_JONOMA }}

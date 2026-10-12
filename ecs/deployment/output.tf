@@ -4,16 +4,14 @@ output "cluster_name" {
 }
 
 output "lb_external_dns" {
-  description = "External load balancer DNS name"
+  description = "External load balancer DNS name (null when disabled)"
   value       = module.cluster.lb_external_dns
 }
 
 output "ssm_parameters" {
   description = "SSM parameters published by this stack"
-  value = [
+  value = concat(aws_ssm_parameter.lb_external_arn[*].name, aws_ssm_parameter.lb_external_listener_arn[*].name, [
     aws_ssm_parameter.cluster_name.name,
-    aws_ssm_parameter.lb_external_arn.name,
-    aws_ssm_parameter.lb_external_listener_arn.name,
     aws_ssm_parameter.lb_internal_arn.name,
     aws_ssm_parameter.lb_internal_listener_arn.name,
     aws_ssm_parameter.service_discovery_namespace_name.name,
@@ -22,5 +20,5 @@ output "ssm_parameters" {
     aws_ssm_parameter.service_connect_namespace_id.name,
     aws_ssm_parameter.vpc_link_id.name,
     aws_ssm_parameter.vpc_link_nlb_arn.name,
-  ]
+  ])
 }

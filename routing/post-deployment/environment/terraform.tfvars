@@ -11,6 +11,8 @@ routing = {
   secondary = 0
 }
 
-# No public domain in AWS yet: the accelerator is reached through its own DNS name / static IPs.
-# route53_hosted_zone = "Z0000000000000"
-# dns_name            = "app.example.com"
+# Public name in Cloudflare, proxied (orange cloud): WAF, DDoS and origin hidden. The origin only
+# accepts Cloudflare IPs (see ecs/deployment), so this is the only way in.
+cloudflare_zone    = "joshuel.com.br"
+dns_name           = "multiregion.joshuel.com.br"
+cloudflare_proxied = true

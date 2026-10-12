@@ -13,3 +13,7 @@ ssm_public_subnets = [
   "/jonomait-multiregion/vpc/public/sa-east-1b",
   "/jonomait-multiregion/vpc/public/sa-east-1c"
 ]
+
+ssm_acm_certs = [
+  "/jonomait-ecs/acm/arn"
+]

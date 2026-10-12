@@ -25,6 +25,10 @@ on:
         type: boolean
         default: false
         description: Generate a destroy plan (used only by destroy.yml)
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        required: false
+        description: Cloudflare API token (Zone:Read + DNS:Edit), only for components that manage Cloudflare records. Callers map it from the CLOUDFLARE_API_TOKEN_JONOMA repo secret
 
 jobs:
   terraform:
@@ -37,6 +41,8 @@ jobs:
     env:
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
+      # Empty unless the caller passes it: only components with Cloudflare resources get the token.
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

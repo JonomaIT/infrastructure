@@ -9,6 +9,6 @@ output "global_accelerator_ips" {
 }
 
 output "dns_name" {
-  description = "Public name pointing to the accelerator (null when not configured)"
-  value       = one(aws_route53_record.main[*].fqdn)
+  description = "Public name pointing to the accelerator"
+  value       = cloudflare_record.main.hostname
 }

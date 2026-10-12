@@ -16,7 +16,7 @@ crash.*.log
 *.tfvars
 *.tfvars.json
 
-# Os tfvars de ambiente são a configuração versionada da infra (sem segredo) e a pipeline precisa deles.
+# Environment tfvars are the versioned infrastructure config (no secrets) and the pipeline needs them.
 !**/environment/**/*.tfvars
 !**/environment/*.tfvars
 

@@ -1,34 +1,34 @@
 variable "region" {
   type        = string
-  description = "Região do provider (IAM é global; a região só afeta as chamadas de API)"
+  description = "Provider region (IAM is global; the region only affects API calls)"
 }
 
 variable "github_org" {
   type        = string
-  description = "Organização do GitHub dona do repositório (ex: JonomaIT)"
+  description = "GitHub organization that owns the repository (e.g. JonomaIT)"
 }
 
 variable "github_repo" {
   type        = string
-  description = "Repositório que pode assumir a role (ex: infrastructure)"
+  description = "Repository allowed to assume the role (e.g. infrastructure)"
 }
 
 variable "github_org_id" {
   type        = string
-  description = "ID numérico da organização (gh api orgs/<org> -q .id), usado no sub imutável do OIDC"
+  description = "Numeric organization ID (gh api orgs/<org> -q .id), used in the immutable OIDC sub"
 }
 
 variable "github_repo_id" {
   type        = string
-  description = "ID numérico do repositório (gh api repos/<org>/<repo> -q .id), usado no sub imutável do OIDC"
+  description = "Numeric repository ID (gh api repos/<org>/<repo> -q .id), used in the immutable OIDC sub"
 }
 
 variable "state_bucket" {
   type        = string
-  description = "Bucket S3 onde ficam os states do Terraform"
+  description = "S3 bucket holding the Terraform states"
 }
 
 variable "ssm_prefixes" {
   type        = list(string)
-  description = "Prefixos dos parâmetros SSM que a pipeline pode gerenciar, um por stack (ex: /jonomait-multiregion)"
+  description = "SSM parameter prefixes the pipeline may manage, one per stack (e.g. /jonomait-multiregion)"
 }

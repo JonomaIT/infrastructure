@@ -1,15 +1,15 @@
 output "cluster_name" {
-  description = "Nome do cluster ECS"
+  description = "ECS cluster name"
   value       = module.cluster.cluster_name
 }
 
 output "lb_external_dns" {
-  description = "DNS do load balancer externo"
+  description = "External load balancer DNS name"
   value       = module.cluster.lb_external_dns
 }
 
 output "ssm_parameters" {
-  description = "Parâmetros SSM publicados por esta stack"
+  description = "SSM parameters published by this stack"
   value = [
     aws_ssm_parameter.cluster_name.name,
     aws_ssm_parameter.lb_external_arn.name,

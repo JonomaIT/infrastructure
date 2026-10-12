@@ -1,16 +1,16 @@
 variable "region" {
   type        = string
-  description = "Região AWS onde a VPC é criada"
+  description = "AWS region where the VPC is created"
 }
 
 variable "project_name" {
   type        = string
-  description = "Nome do projeto. Prefixo dos recursos e dos parâmetros SSM (ex: jonomait-multiregion)"
+  description = "Project name. Prefix for resources and SSM parameters (e.g. jonomait-multiregion)"
 }
 
 variable "cidr" {
   type        = string
-  description = "Bloco CIDR da VPC"
+  description = "VPC CIDR block"
 }
 
 variable "public_subnets" {
@@ -19,7 +19,7 @@ variable "public_subnets" {
     cidr              = string
     availability_zone = string
   }))
-  description = "Subnets públicas (uma por AZ)"
+  description = "Public subnets (one per AZ)"
 }
 
 variable "private_subnets" {
@@ -28,5 +28,5 @@ variable "private_subnets" {
     cidr              = string
     availability_zone = string
   }))
-  description = "Subnets privadas (cada AZ precisa de uma subnet pública)"
+  description = "Private subnets (each AZ needs a public subnet)"
 }

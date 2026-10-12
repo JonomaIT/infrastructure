@@ -1,15 +1,15 @@
 name: Destroy
 
-# Destrói o lab. Só manual, com confirmação digitada e aprovação do Environment "destroy".
-# Ordem inversa da criação: ecs antes da network (load balancers e VPC Link ficam nas subnets),
-# e dentro de cada stack: post → sa-east-1 → us-east-1 → pre.
-# Para subir de novo: Run workflow no "Infrastructure".
+# Tears the lab down. Manual only, with a typed confirmation and approval through the "destroy" Environment.
+# Reverse creation order: ecs before network (load balancers and the VPC Link live in the subnets),
+# and within each stack: post → sa-east-1 → us-east-1 → pre.
+# To bring it back up: Run workflow on "Infrastructure".
 on:
   workflow_dispatch:
     inputs:
       stack:
         type: choice
-        description: "O que destruir: ecs (só o cluster) ou all (cluster e rede)"
+        description: "What to destroy: ecs (cluster only) or all (cluster and network)"
         options:
           - ecs
           - all
@@ -17,13 +17,13 @@ on:
       confirm:
         type: string
         required: true
-        description: Digite "destroy" para confirmar
+        description: Type "destroy" to confirm
 
 permissions:
   contents: read
-  id-token: write # necessário para o OIDC com a AWS
+  id-token: write # required for OIDC with AWS
 
-# Mesmo grupo do Infrastructure: nunca destrói enquanto um apply roda (e vice-versa).
+# Same group as Infrastructure: never destroys while an apply is running (and vice versa).
 concurrency:
   group: terraform-infrastructure
   cancel-in-progress: false
@@ -40,11 +40,11 @@ jobs:
           REF: ${{ github.ref }}
         run: |
           if [ "$CONFIRM" != "destroy" ]; then
-            echo "::error::Confirmação inválida. Digite exatamente: destroy"
+            echo "::error::Invalid confirmation. Type exactly: destroy"
             exit 1
           fi
           if [ "$REF" != "refs/heads/main" ]; then
-            echo "::error::Destroy só roda a partir da main (recebido: $REF)"
+            echo "::error::Destroy only runs from main (got: $REF)"
             exit 1
           fi
 
@@ -53,10 +53,10 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    environment: destroy # required reviewers: o job espera aprovação antes de rodar
+    environment: destroy # required reviewers: the job waits for approval before running
     steps:
       - name: Approved
-        run: echo "Destroy de '${{ inputs.stack }}' aprovado por ${{ github.actor }}" >> "$GITHUB_STEP_SUMMARY"
+        run: echo "Destroy of '${{ inputs.stack }}' approved by ${{ github.actor }}" >> "$GITHUB_STEP_SUMMARY"
 
   # -------------------------------------------------------------------- ecs
   ecs-post:

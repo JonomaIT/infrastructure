@@ -1,6 +1,6 @@
 # infrastructure
 
-Infraestrutura da JonomaIT em Terraform: uma rede em duas regiões (`us-east-1` e `sa-east-1`) ligadas por peering, e um cluster ECS em cada região. Os módulos vêm de [`terraform-modules`](https://github.com/JonomaIT/terraform-modules), sempre por tag.
+JonomaIT infrastructure in Terraform: a network in two regions (`us-east-1` and `sa-east-1`) connected by peering, and an ECS cluster in each region. Modules come from [`terraform-modules`](https://github.com/JonomaIT/terraform-modules), always pinned by tag.
 
 ## Stacks
 
@@ -12,35 +12,35 @@ network/                      ecs/
 │       ├── us-east-1/        │       ├── us-east-1/
 │       └── sa-east-1/        │       └── sa-east-1/
 └── post-deployment (peering) └── post-deployment
-bootstrap/                    ← role do GitHub Actions (aplicado à mão)
+bootstrap/                    ← GitHub Actions role (applied manually)
 ```
 
-| Stack | O que cria | Publica no SSM | Lê do SSM |
+| Stack | Creates | Publishes to SSM | Reads from SSM |
 |---|---|---|---|
-| `network` | VPC, subnets, NAT por AZ, peering entre as regiões com rotas | `/jonomait-multiregion/vpc/...` | — |
-| `ecs` | Cluster ECS, ALB externo, ALB interno, zona `jonomait-ecs.internal`, Cloud Map, VPC Link | `/jonomait-ecs/...` | `/jonomait-multiregion/vpc/...` |
+| `network` | VPC, subnets, one NAT per AZ, cross-region peering with routes | `/jonomait-multiregion/vpc/...` | — |
+| `ecs` | ECS cluster, external ALB, internal ALB, `jonomait-ecs.internal` zone, Cloud Map, VPC Link | `/jonomait-ecs/...` | `/jonomait-multiregion/vpc/...` |
 
-Uma stack nunca lê o state da outra: tudo o que é compartilhado passa pelo SSM, por convenção de nome.
+A stack never reads another stack's state: everything shared goes through SSM, by naming convention.
 
-Cada componente tem um state próprio no bucket `jonomait-statefiles`, com lock nativo do S3. A região é argumento, não pasta: o mesmo `deployment/` roda com `environment/<região>/`.
+Each component has its own state in the `jonomait-statefiles` bucket, with native S3 locking. The region is an argument, not a folder: the same `deployment/` runs with `environment/<region>/`.
 
 ## Pipeline
 
-| Workflow | Quando | O que faz |
+| Workflow | When | What it does |
 |---|---|---|
-| `Infrastructure` | PR para `main` | `plan` só das stacks afetadas (mudar `network` também planeja `ecs`) |
-| `Infrastructure` | push na `main` | `plan` + `apply` do plan salvo, em todas as stacks: network → ecs |
-| `Infrastructure` | manual | escolhe `all` ou `ecs` |
-| `Destroy` | manual | ver abaixo |
+| `Infrastructure` | PR to `main` | `plan` for the affected stacks only (a `network` change also plans `ecs`) |
+| `Infrastructure` | push to `main` | `plan` + `apply` of the saved plan for every stack: network → ecs |
+| `Infrastructure` | manual | choose `all` or `ecs` |
+| `Destroy` | manual | see below |
 
-- Autenticação na AWS por **OIDC**, sem access key. A role é `github-actions-<repo>`, criada pelo `bootstrap`.
-- O apply aplica exatamente o plan gerado no mesmo job.
-- Actions fixadas por SHA; versão do Terraform pela variável da org `TERRAFORM_VERSION`.
-- Variáveis da org usadas: `AWS_ACCOUNT_ID`, `AWS_REGION`, `TERRAFORM_VERSION`.
+- AWS authentication through **OIDC**, no access keys. The role is `github-actions-<repo>`, created by `bootstrap`.
+- The apply runs exactly the plan generated in the same job.
+- Actions pinned by SHA; Terraform version from the `TERRAFORM_VERSION` org variable.
+- Org variables used: `AWS_ACCOUNT_ID`, `AWS_REGION`, `TERRAFORM_VERSION`.
 
 ## Bootstrap
 
-A role da pipeline não tem permissão de IAM, de propósito: o `bootstrap/` é aplicado à mão, por alguém com acesso administrativo.
+The pipeline role has no IAM permissions on purpose: `bootstrap/` is applied manually, by someone with administrative access.
 
 ```bash
 cd bootstrap
@@ -48,21 +48,21 @@ terraform init -backend-config=environment/backend.tfvars
 terraform apply -var-file=environment/terraform.tfvars
 ```
 
-Stack nova que grava no SSM ou usa serviço novo = permissão nova aqui antes do primeiro run.
+A new stack that writes to SSM or uses a new AWS service needs its permissions added here before its first run.
 
 ## Destroy
 
-`Actions → Destroy → Run workflow`, a partir da `main`:
+`Actions → Destroy → Run workflow`, from `main`:
 
-1. `stack`: `ecs` (só o cluster) ou `all` (cluster e rede).
-2. `confirm`: digite `destroy`.
-3. Aprove o job **Approve destroy** (Environment `destroy`, com revisor obrigatório).
+1. `stack`: `ecs` (cluster only) or `all` (cluster and network).
+2. `confirm`: type `destroy`.
+3. Approve the **Approve destroy** job (`destroy` Environment, with a required reviewer).
 
-Ordem: `ecs` antes de `network` (os load balancers e o VPC Link ocupam as subnets) e, dentro de cada stack, `post → sa-east-1 → us-east-1 → pre`. O `bootstrap` nunca é destruído pela pipeline.
+Order: `ecs` before `network` (load balancers and the VPC Link sit in the subnets) and, within each stack, `post → sa-east-1 → us-east-1 → pre`. `bootstrap` is never destroyed by the pipeline.
 
-Para subir tudo de novo: `Actions → Infrastructure → Run workflow`.
+To bring everything back up: `Actions → Infrastructure → Run workflow`.
 
-## Rodando localmente
+## Running locally
 
 ```bash
 cd network/deployment
@@ -70,8 +70,8 @@ terraform init -reconfigure -backend-config=environment/us-east-1/backend.tfvars
 terraform plan -var-file=environment/us-east-1/terraform.tfvars
 ```
 
-`-reconfigure` é obrigatório ao trocar de região no mesmo diretório: sem ele o `plan` usa o state da região anterior.
+`-reconfigure` is required when switching regions in the same directory: without it, `plan` uses the previous region's state.
 
-## Custos
+## Costs
 
-Ficam cobrando enquanto existem: NAT Gateways (3 por região), os 3 load balancers do ECS por região e o Container Insights. Para pausar o lab, use o `Destroy`.
+These keep billing while they exist: NAT Gateways (3 per region), the 3 ECS load balancers per region and Container Insights. To pause the lab, use `Destroy`.

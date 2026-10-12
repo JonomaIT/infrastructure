@@ -27,3 +27,10 @@ resource "aws_iam_role_policy" "ecs" {
   role   = aws_iam_role.github_actions.id
   policy = data.aws_iam_policy_document.ecs.json
 }
+
+# routing stack (Global Accelerator)
+resource "aws_iam_role_policy" "routing" {
+  name   = "terraform-routing"
+  role   = aws_iam_role.github_actions.id
+  policy = data.aws_iam_policy_document.routing.json
+}

@@ -1,5 +1,5 @@
 module "cluster" {
-  source = "git::https://github.com/JonomaIT/terraform-modules.git//cluster-ecs?ref=v0.2.0"
+  source = "git::https://github.com/JonomaIT/terraform-modules.git//cluster-ecs?ref=v0.3.0"
 
   project_name = var.project_name
 

@@ -1,13 +1,13 @@
 # infrastructure
 
-JonomaIT infrastructure in Terraform: a network in two regions (`us-east-1` and `sa-east-1`) connected by peering, and an ECS cluster in each region. Modules come from [`terraform-modules`](https://github.com/JonomaIT/terraform-modules), always pinned by tag.
+JonomaIT infrastructure in Terraform: a network in two regions (`us-east-1` and `sa-east-1`) connected by peering, an ECS cluster in each region, and a Global Accelerator routing traffic between them. Modules come from [`terraform-modules`](https://github.com/JonomaIT/terraform-modules), always pinned by tag.
 
 ## Stacks
 
 ```
-network/                      ecs/
-├── pre-deployment            ├── pre-deployment
-├── deployment                ├── deployment       ← cluster-ecs?ref=v0.2.0
+network/                      ecs/                          routing/
+├── pre-deployment            ├── pre-deployment            ├── pre-deployment
+├── deployment  ← vpc         ├── deployment  ← cluster-ecs └── post-deployment (Global Accelerator)
 │   └── environment/          │   └── environment/
 │       ├── us-east-1/        │       ├── us-east-1/
 │       └── sa-east-1/        │       └── sa-east-1/
@@ -18,7 +18,8 @@ bootstrap/                    ← GitHub Actions role (applied manually)
 | Stack | Creates | Publishes to SSM | Reads from SSM |
 |---|---|---|---|
 | `network` | VPC, subnets, one NAT per AZ, cross-region peering with routes | `/jonomait-multiregion/vpc/...` | — |
-| `ecs` | ECS cluster, external ALB, internal ALB, `jonomait-ecs.internal` zone, Cloud Map, VPC Link | `/jonomait-ecs/...` | `/jonomait-multiregion/vpc/...` |
+| `ecs` | ECS cluster, external ALB, internal ALB, `jonomait-ecs.internal` zone, Cloud Map, internal NLB + VPC Link | `/jonomait-ecs/...` | `/jonomait-multiregion/vpc/...` |
+| `routing` | Global Accelerator (2 static anycast IPs) with one endpoint group per region pointing at the ecs NLB; optional Route 53 name | — | `/jonomait-ecs/vpc-link/nlb-arn` (both regions) |
 
 A stack never reads another stack's state: everything shared goes through SSM, by naming convention.
 
@@ -28,9 +29,9 @@ Each component has its own state in the `jonomait-statefiles` bucket, with nativ
 
 | Workflow | When | What it does |
 |---|---|---|
-| `Infrastructure` | PR to `main` | `plan` for the affected stacks only (a `network` change also plans `ecs`) |
-| `Infrastructure` | push to `main` | `plan` + `apply` of the saved plan for every stack: network → ecs |
-| `Infrastructure` | manual | choose `all` or `ecs` |
+| `Infrastructure` | PR to `main` | `plan` for the affected stacks and everything downstream (network → ecs → routing) |
+| `Infrastructure` | push to `main` | `plan` + `apply` of the saved plan for every stack: network → ecs → routing |
+| `Infrastructure` | manual | choose where to start: `all`, `ecs` or `routing` (downstream stacks always run) |
 | `Destroy` | manual | see below |
 
 - AWS authentication through **OIDC**, no access keys. The role is `github-actions-<repo>`, created by `bootstrap`.
@@ -54,13 +55,26 @@ A new stack that writes to SSM or uses a new AWS service needs its permissions a
 
 `Actions → Destroy → Run workflow`, from `main`:
 
-1. `stack`: `ecs` (cluster only) or `all` (cluster and network).
+1. `stack`: `routing` (Global Accelerator only), `ecs` (routing + cluster) or `all` (everything).
 2. `confirm`: type `destroy`.
 3. Approve the **Approve destroy** job (`destroy` Environment, with a required reviewer).
 
-Order: `ecs` before `network` (load balancers and the VPC Link sit in the subnets) and, within each stack, `post → sa-east-1 → us-east-1 → pre`. `bootstrap` is never destroyed by the pipeline.
+Order: `routing → ecs → network` (Global Accelerator points at the ecs NLBs; load balancers and the VPC Link sit in the network subnets) and, within each stack, `post → regions → pre`. `bootstrap` is never destroyed by the pipeline.
 
 To bring everything back up: `Actions → Infrastructure → Run workflow`.
+
+## Traffic routing
+
+`routing/post-deployment/environment/terraform.tfvars` sets the traffic dial per region:
+
+```hcl
+routing = {
+  primary   = 100 # us-east-1
+  secondary = 0   # sa-east-1
+}
+```
+
+`100/0` is active-passive. To fail over, swap it to `0/100` and merge; `50/50` splits traffic (active-active). Until a service is deployed, each ALB answers `200` with `jonomait-ecs - <region>`, so `curl http://<accelerator DNS>` shows which region served the request.
 
 ## Running locally
 
@@ -74,4 +88,4 @@ terraform plan -var-file=environment/us-east-1/terraform.tfvars
 
 ## Costs
 
-These keep billing while they exist: NAT Gateways (3 per region), the 3 ECS load balancers per region and Container Insights. To pause the lab, use `Destroy`.
+These keep billing while they exist: NAT Gateways (3 per region), the 3 ECS load balancers per region, Container Insights and the Global Accelerator (fixed hourly fee plus data transfer premium). To pause the lab, use `Destroy` (`routing` alone removes just the accelerator).

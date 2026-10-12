@@ -11,6 +11,8 @@ routing = {
   secondary = 0
 }
 
-# Public name in Cloudflare (DNS only, see cloudflare.tf). Covered by the *.joshuel.com.br certificate.
-cloudflare_zone = "joshuel.com.br"
-dns_name        = "multiregion.joshuel.com.br"
+# Public name in Cloudflare, proxied (orange cloud): WAF, DDoS and origin hidden. The origin only
+# accepts Cloudflare IPs (see ecs/deployment), so this is the only way in.
+cloudflare_zone    = "joshuel.com.br"
+dns_name           = "multiregion.joshuel.com.br"
+cloudflare_proxied = true

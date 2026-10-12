@@ -18,7 +18,7 @@ bootstrap/                    ← GitHub Actions role (applied manually)
 | Stack | Creates | Publishes to SSM | Reads from SSM |
 |---|---|---|---|
 | `network` | VPC, subnets, one NAT per AZ, cross-region peering with routes | `/jonomait-multiregion/vpc/...` | — |
-| `ecs` | `pre-deployment`: ACM `*.joshuel.com.br` in both regions, validated through Cloudflare DNS. `deployment`: ECS cluster, external ALB, internal ALB (HTTP + HTTPS), `jonomait-ecs.internal` zone, Cloud Map, internal NLB + VPC Link | `/jonomait-ecs/...` (incl. `/jonomait-ecs/acm/arn` per region) | `/jonomait-multiregion/vpc/...` |
+| `ecs` | `pre-deployment`: ACM `*.joshuel.com.br` in both regions, validated through Cloudflare DNS. `deployment`: ECS cluster, internal ALB (HTTP + HTTPS), `jonomait-ecs.internal` zone, Cloud Map, internal NLB + VPC Link. Ingress only from Cloudflare + the VPC; no internet-facing ALB | `/jonomait-ecs/...` (incl. `/jonomait-ecs/acm/arn` per region) | `/jonomait-multiregion/vpc/...` |
 | `routing` | Global Accelerator (2 static anycast IPs) with one endpoint group per region pointing at the ecs NLB, and the public name `multiregion.joshuel.com.br` in Cloudflare | — | `/jonomait-ecs/vpc-link/nlb-arn` (both regions) |
 
 A stack never reads another stack's state: everything shared goes through SSM, by naming convention.
@@ -85,7 +85,11 @@ routing = {
 export CLOUDFLARE_API_TOKEN='...'
 ```
 
-The public record is DNS only (`cloudflare_proxied = false`): clients reach the accelerator directly, so failover follows the traffic dial. Setting it to `true` puts Cloudflare's proxy (WAF, cache) in front and requires the zone SSL mode to be Full (strict).
+The public record is **proxied** (orange cloud): WAF, DDoS protection and the origin hidden behind Cloudflare. Failover still follows the Global Accelerator traffic dial.
+
+**Only Cloudflare gets in.** `ecs/deployment` reads Cloudflare's published IP ranges (`https://api.cloudflare.com/client/v4/ips`, no token, refreshed on every plan) and passes them to the module as `ingress_cidrs`: the NLB and the internal ALB accept ports 80/443 only from those ranges and the VPC CIDR. Since the accelerator preserves the source IP, requests sent straight to the accelerator's DNS name or IPs are dropped. The internet-facing ALB is disabled (`external_lb_enabled = false`), so there is no other public entry point.
+
+Zone settings expected (managed in the Cloudflare dashboard, not by Terraform): SSL/TLS mode **Full (strict)**, **Always Use HTTPS** on, minimum TLS 1.2.
 
 ## Running locally
 

@@ -7,12 +7,16 @@ resource "aws_ssm_parameter" "cluster_name" {
 }
 
 resource "aws_ssm_parameter" "lb_external_arn" {
+  count = var.external_lb_enabled ? 1 : 0
+
   type  = "String"
   name  = format("/%s/lb/external/arn", var.project_name)
   value = module.cluster.lb_external_arn
 }
 
 resource "aws_ssm_parameter" "lb_external_listener_arn" {
+  count = var.external_lb_enabled ? 1 : 0
+
   type  = "String"
   name  = format("/%s/lb/external/listener", var.project_name)
   value = module.cluster.lb_external_listener_arn
@@ -64,4 +68,15 @@ resource "aws_ssm_parameter" "vpc_link_nlb_arn" {
   type  = "String"
   name  = format("/%s/vpc-link/nlb-arn", var.project_name)
   value = module.cluster.vpc_link_nlb_arn
+}
+
+# The external ALB became optional (count): keep existing parameters when it is enabled.
+moved {
+  from = aws_ssm_parameter.lb_external_arn
+  to   = aws_ssm_parameter.lb_external_arn[0]
+}
+
+moved {
+  from = aws_ssm_parameter.lb_external_listener_arn
+  to   = aws_ssm_parameter.lb_external_listener_arn[0]
 }

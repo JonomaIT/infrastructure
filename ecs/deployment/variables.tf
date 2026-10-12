@@ -28,3 +28,15 @@ variable "ssm_acm_certs" {
   description = "SSM parameters with ACM certificate ARNs, published by ecs/pre-deployment. Empty = HTTP only"
   default     = []
 }
+
+variable "cloudflare_only" {
+  type        = bool
+  description = "Accept traffic on the NLB and internal ALB only from Cloudflare's IP ranges (plus the VPC). Requires the public name to be proxied"
+  default     = true
+}
+
+variable "external_lb_enabled" {
+  type        = bool
+  description = "Create the internet-facing ALB (it bypasses Cloudflare and the Global Accelerator)"
+  default     = false
+}

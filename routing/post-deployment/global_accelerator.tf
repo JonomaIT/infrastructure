@@ -15,11 +15,7 @@ resource "aws_globalaccelerator_listener" "main" {
   protocol        = "TCP"
   client_affinity = "NONE"
 
-  port_range {
-    from_port = 80
-    to_port   = 80
-  }
-
+  # HTTPS only. Plain HTTP is redirected at the Cloudflare edge and never reaches the origin.
   port_range {
     from_port = 443
     to_port   = 443

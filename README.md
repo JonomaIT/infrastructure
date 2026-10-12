@@ -19,7 +19,7 @@ bootstrap/                    ← GitHub Actions role (applied manually)
 |---|---|---|---|
 | `network` | VPC, subnets, one NAT per AZ, cross-region peering with routes | `/jonomait-multiregion/vpc/...` | — |
 | `ecs` | `pre-deployment`: ACM `*.joshuel.com.br` in both regions, validated through Cloudflare DNS. `deployment`: ECS cluster, internal ALB (HTTP + HTTPS), `jonomait-ecs.internal` zone, Cloud Map, internal NLB + VPC Link. Ingress only from Cloudflare + the VPC; no internet-facing ALB | `/jonomait-ecs/...` (incl. `/jonomait-ecs/acm/arn` per region) | `/jonomait-multiregion/vpc/...` |
-| `routing` | Global Accelerator (2 static anycast IPs) with one endpoint group per region pointing at the ecs NLB, and the public name `multiregion.joshuel.com.br` in Cloudflare | — | `/jonomait-ecs/vpc-link/nlb-arn` (both regions) |
+| `routing` | `pre-deployment`: Cloudflare zone TLS settings. `post-deployment`: Global Accelerator (2 static anycast IPs, HTTPS only) with one endpoint group per region pointing at the ecs NLB, and the public name `multiregion.joshuel.com.br` in Cloudflare | — | `/jonomait-ecs/vpc-link/nlb-arn` (both regions) |
 
 A stack never reads another stack's state: everything shared goes through SSM, by naming convention.
 
@@ -79,7 +79,7 @@ routing = {
 
 ## Cloudflare
 
-`ecs/pre-deployment` (certificate validation records) and `routing/post-deployment` (public CNAME) use the Cloudflare provider. It reads the token from `CLOUDFLARE_API_TOKEN`, so the token never goes through tfvars or the state. Locally, export it before running those two components:
+`ecs/pre-deployment` (certificate validation records), `routing/pre-deployment` (zone settings) and `routing/post-deployment` (public CNAME) use the Cloudflare provider. Token permissions on the zone: `Zone:Read`, `DNS:Edit` and `Zone Settings:Edit`. It reads the token from `CLOUDFLARE_API_TOKEN`, so the token never goes through tfvars or the state. Locally, export it before running those two components:
 
 ```bash
 export CLOUDFLARE_API_TOKEN='...'
@@ -87,9 +87,12 @@ export CLOUDFLARE_API_TOKEN='...'
 
 The public record is **proxied** (orange cloud): WAF, DDoS protection and the origin hidden behind Cloudflare. Failover still follows the Global Accelerator traffic dial.
 
-**Only Cloudflare gets in.** `ecs/deployment` reads Cloudflare's published IP ranges (`https://api.cloudflare.com/client/v4/ips`, no token, refreshed on every plan) and passes them to the module as `ingress_cidrs`: the NLB and the internal ALB accept ports 80/443 only from those ranges and the VPC CIDR. Since the accelerator preserves the source IP, requests sent straight to the accelerator's DNS name or IPs are dropped. The internet-facing ALB is disabled (`external_lb_enabled = false`), so there is no other public entry point.
+**Only Cloudflare gets in, and only over HTTPS.** `ecs/deployment` reads Cloudflare's published IP ranges (`https://api.cloudflare.com/client/v4/ips`, no token, refreshed on every plan) and passes them to the module as `ingress_cidrs` with `ingress_ports = [443]`: the NLB and the internal ALB accept port 443 only from those ranges, and port 80 only from the VPC CIDR (service-to-service traffic, health checks, VPC Link). The accelerator listens on 443 only. Since the accelerator preserves the source IP, requests sent straight to the accelerator's DNS name or IPs are dropped. The internet-facing ALB is disabled (`external_lb_enabled = false`), so there is no other public entry point.
 
-Zone settings expected (managed in the Cloudflare dashboard, not by Terraform): SSL/TLS mode **Full (strict)**, **Always Use HTTPS** on, minimum TLS 1.2.
+**HTTPS is enforced in two layers:**
+
+1. **Edge** (`routing/pre-deployment`, zone settings as code): SSL mode **Full (strict)**, **Always Use HTTPS** (HTTP → 301), automatic HTTPS rewrites, minimum TLS 1.2, TLS 1.3 on.
+2. **Origin**: no public path accepts port 80. If the edge redirect is ever turned off, `http://` fails (Cloudflare 522) instead of crossing the internet unencrypted.
 
 ## Running locally
 

@@ -1,8 +1,6 @@
 name: CI
 
-# Every component: formatting, validation and its terraform test against each account/region
-# tfvars, with mocked providers (no AWS or Cloudflare access). Deploys are still run by hand
-# (see README) until the deploy pipeline exists.
+# Logic lives in JonomaIT/pipelines: this file only says when to run it.
 on:
   pull_request:
     branches:
@@ -15,33 +13,5 @@ permissions:
   contents: read
 
 jobs:
-  components:
-    name: fmt · validate · test
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
-        with:
-          terraform_version: ${{ vars.TERRAFORM_VERSION }}
-          terraform_wrapper: false
-
-      - name: Terraform fmt
-        run: terraform fmt -check -recursive
-
-      - name: Validate and test each component with each tfvars
-        run: |
-          for v in $(find . -name versions.tf -not -path '*/.terraform/*' | sort); do
-            dir=$(dirname "$v")
-            echo "::group::$dir"
-            terraform -chdir="$dir" init -backend=false -input=false
-            terraform -chdir="$dir" validate
-            for f in $(cd "$dir" && find env -name '*.tfvars' | sort); do
-              echo "--- $f"
-              terraform -chdir="$dir" test -var-file="$f"
-            done
-            echo "::endgroup::"
-          done
+  terraform:
+    uses: JonomaIT/pipelines/.github/workflows/terraform-ci.yml@v1.0.0

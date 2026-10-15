@@ -1,0 +1,50 @@
+name: Deploy
+
+# Logic lives in JonomaIT/pipelines: this file only says when to run it and the apply order.
+#   pull request → plan of what changed (read-only)
+#   main         → apply of what changed (production waits for approval)
+#   manual       → plan + apply (or destroy) of a component, a tfvars or everything
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      target:
+        type: string
+        required: false
+        default: ""
+        description: Component (e.g. network) or tfvars (e.g. network/env/production/us-east-1.tfvars); empty = everything
+      destroy:
+        type: boolean
+        required: false
+        default: false
+        description: Destroy instead of apply (reverse order)
+
+permissions:
+  contents: read
+  id-token: write # OIDC with AWS
+
+# Never two runs touching the same states; an apply is never interrupted halfway.
+concurrency:
+  group: terraform-${{ github.repository }}-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  terraform:
+    uses: JonomaIT/pipelines/.github/workflows/terraform-deploy.yml@v1.0.0
+    with:
+      order: >-
+        network
+        ecs-cluster
+        alb-shared
+        cross-region/network-peering
+        global/cloudflare-zone
+        global/dns-cloudflare
+      target: ${{ inputs.target || '' }}
+      destroy: ${{ inputs.destroy || false }}
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_JONOMA }}

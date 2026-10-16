@@ -74,6 +74,49 @@ resource "aws_ecr_lifecycle_policy" "app" {
 }
 
 # ---------------------------------------------------------------- replicas
+# The replica repositories are created here, with the same rules, before anything is replicated:
+# ECR creation templates are regional and would have to exist in every replica region, and a
+# repository created by replication alone is not managed (nor destroyed) by Terraform.
+locals {
+  replicas = {
+    for pair in setproduct(var.repositories, var.replica_regions) : "${pair[0]}/${pair[1]}" => { name = pair[0], region = pair[1] }
+  }
+}
+
+#trivy:ignore:AVD-AWS-0033
+resource "aws_ecr_repository" "replica" {
+  for_each = local.replicas
+
+  region               = each.value.region
+  name                 = each.value.name
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = var.force_delete
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+}
+
+resource "aws_ecr_repository_policy" "replica" {
+  for_each = aws_ecr_repository.replica
+
+  region     = each.value.region
+  repository = each.value.name
+  policy     = data.aws_iam_policy_document.pull_from_org.json
+}
+
+resource "aws_ecr_lifecycle_policy" "replica" {
+  for_each = aws_ecr_repository.replica
+
+  region     = each.value.region
+  repository = each.value.name
+  policy     = local.lifecycle_policy
+}
+
 resource "aws_ecr_replication_configuration" "main" {
   count = length(var.replica_regions) > 0 ? 1 : 0
 
@@ -89,21 +132,7 @@ resource "aws_ecr_replication_configuration" "main" {
       }
     }
   }
-}
 
-# Repositories created by replication get the same pull policy, tag immutability and lifecycle.
-#trivy:ignore:AVD-AWS-0033
-resource "aws_ecr_repository_creation_template" "replicas" {
-  count = length(var.replica_regions) > 0 ? 1 : 0
-
-  prefix               = "ROOT"
-  description          = "Replicas of the app repositories (managed by Terraform)"
-  applied_for          = ["REPLICATION"]
-  image_tag_mutability = "IMMUTABLE"
-  repository_policy    = data.aws_iam_policy_document.pull_from_org.json
-  lifecycle_policy     = local.lifecycle_policy
-
-  encryption_configuration {
-    encryption_type = "AES256"
-  }
+  # Replicas exist (with their pull policy) before the first image is replicated.
+  depends_on = [aws_ecr_repository_policy.replica]
 }

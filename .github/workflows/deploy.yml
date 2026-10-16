@@ -44,6 +44,7 @@ jobs:
     uses: JonomaIT/pipelines/.github/workflows/terraform-deploy.yml@v1.1.2
     with:
       order: >-
+        ecr
         network
         ecs-cluster
         alb-shared

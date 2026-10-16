@@ -41,7 +41,7 @@ concurrency:
 
 jobs:
   deploy:
-    uses: JonomaIT/pipelines/.github/workflows/terraform-deploy.yml@v1.1.0
+    uses: JonomaIT/pipelines/.github/workflows/terraform-deploy.yml@v1.1.1
     with:
       order: >-
         network

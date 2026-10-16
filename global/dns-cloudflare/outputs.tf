@@ -1,6 +1,6 @@
-output "names" {
-  description = "Public names managed here"
-  value       = values(local.fqdn)
+output "ingress" {
+  description = "Entry of the environment; apps point their names here (ADR-010)"
+  value       = local.ingress
 }
 
 output "mode" {

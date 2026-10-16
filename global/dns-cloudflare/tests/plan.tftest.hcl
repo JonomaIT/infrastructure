@@ -76,9 +76,14 @@ run "plan" {
   assert {
     condition = (
       length(var.regions) == 1
-      ? length(cloudflare_dns_record.app) == length(var.records) && length(cloudflare_load_balancer.app) == 0
-      : length(cloudflare_load_balancer.app) == length(var.records) && length(cloudflare_load_balancer_pool.app) == 2 * length(var.records) && length(cloudflare_dns_record.app) == 0
+      ? length(cloudflare_dns_record.ingress) == 1 && length(cloudflare_load_balancer.ingress) == 0
+      : length(cloudflare_load_balancer.ingress) == 1 && length(cloudflare_load_balancer_pool.region) == 2 && length(cloudflare_dns_record.ingress) == 0
     )
-    error_message = "One region: a CNAME per name. Two regions: a load balancer per name with one pool per region."
+    error_message = "One region: the ingress is a CNAME. Two regions: the ingress is a load balancer with one pool per region."
+  }
+
+  assert {
+    condition     = startswith(output.ingress, "ingress")
+    error_message = "The entry of the environment is ingress.<zone> (production) or ingress-<env>.<zone>."
   }
 }

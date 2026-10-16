@@ -1,24 +1,23 @@
-# Public names of this account's apps (ADR-002, ADR-009). A new public name is a PR here.
-#   one region  → proxied CNAME to the shared ALB of that region
-#   two regions → Cloudflare Load Balancing: an HTTPS monitor per name, one pool per region
-#                 (each pointing at that region's ALB) and failover in the order of var.regions
+# Entry of the environment (ADR-009, ADR-010): one public name per account, owned by the platform.
+# Apps never get a name here: each app creates its own proxied CNAME to this entry when it is
+# deployed (app-dns pattern), and the shared ALB routes its host to it.
+#   one region  → ingress is a proxied CNAME to the shared ALB of that region
+#   two regions → ingress is a Cloudflare Load Balancer: one pool per region (that region's ALB),
+#                 a monitor on the ALB's /health (the region, not an app) and failover in the
+#                 order of var.regions
 
 locals {
   env_short = { "shared-services" = "shr", staging = "stg", production = "prd" }[var.environment]
   alb_name  = "jonomait-${local.env_short}-alb-shared"
   multi     = length(var.regions) > 1
 
-  fqdn = { for name, r in var.records : name => "${name}.${var.zone}" }
+  # Same convention as alb-shared, whose /health answers on this host.
+  ingress = var.environment == "production" ? "ingress.${var.zone}" : "ingress-${local.env_short}.${var.zone}"
 
   alb_dns = merge(
     { (var.regions[0]) = data.aws_lb.primary.dns_name },
     local.multi ? { (var.regions[1]) = data.aws_lb.secondary[0].dns_name } : {},
   )
-
-  # One pool per (name, region): "hello/us-east-1"
-  pools = local.multi ? {
-    for pair in setproduct(keys(var.records), var.regions) : "${pair[0]}/${pair[1]}" => { name = pair[0], region = pair[1] }
-  } : {}
 }
 
 data "cloudflare_zone" "main" {
@@ -38,63 +37,63 @@ data "aws_lb" "secondary" {
 }
 
 # ----------------------------------------------------------------- one region
-resource "cloudflare_dns_record" "app" {
-  for_each = local.multi ? {} : var.records
+resource "cloudflare_dns_record" "ingress" {
+  count = local.multi ? 0 : 1
 
   zone_id = data.cloudflare_zone.main.id
-  name    = local.fqdn[each.key]
+  name    = local.ingress
   type    = "CNAME"
   content = local.alb_dns[var.regions[0]]
   proxied = true
   ttl     = 1 # automatic; mandatory when proxied
-  comment = "${var.environment} shared ALB (managed by Terraform)"
+  comment = "owner: platform, ${var.environment} entry (managed by Terraform)"
 }
 
 # --------------------------------------------------------------- two regions
-resource "cloudflare_load_balancer_monitor" "app" {
-  for_each = local.multi ? var.records : {}
+resource "cloudflare_load_balancer_monitor" "ingress" {
+  count = local.multi ? 1 : 0
 
   account_id     = data.cloudflare_zone.main.account.id
-  description    = local.fqdn[each.key]
+  description    = "${local.ingress} region health"
   type           = "https"
   method         = "GET"
-  path           = each.value.health_check_path
+  path           = "/health"
   expected_codes = "200"
   interval       = 60
   timeout        = 5
   retries        = 2
 
-  # The ALB routes by host name: without this header the check would hit the default 404.
+  # The ALB answers /health only for the ingress host (alb module, priority 1).
   header = {
-    Host = [local.fqdn[each.key]]
+    Host = [local.ingress]
   }
 }
 
-resource "cloudflare_load_balancer_pool" "app" {
-  for_each = local.pools
+resource "cloudflare_load_balancer_pool" "region" {
+  for_each = local.multi ? toset(var.regions) : toset([])
 
   account_id  = data.cloudflare_zone.main.account.id
-  name        = replace("jonomait-${local.env_short}-${each.value.name}-${each.value.region}", ".", "-")
-  description = "${local.fqdn[each.value.name]} in ${each.value.region}"
-  monitor     = cloudflare_load_balancer_monitor.app[each.value.name].id
+  name        = replace("jonomait-${local.env_short}-${each.value}", ".", "-")
+  description = "${var.environment} shared ALB in ${each.value}"
+  monitor     = cloudflare_load_balancer_monitor.ingress[0].id
 
   origins = [{
-    name    = each.value.region
-    address = local.alb_dns[each.value.region]
+    name    = each.value
+    address = local.alb_dns[each.value]
     enabled = true
   }]
 }
 
-resource "cloudflare_load_balancer" "app" {
-  for_each = local.multi ? var.records : {}
+resource "cloudflare_load_balancer" "ingress" {
+  count = local.multi ? 1 : 0
 
   zone_id     = data.cloudflare_zone.main.id
-  name        = local.fqdn[each.key]
-  description = "${var.environment}: ${join(" → ", var.regions)} (managed by Terraform)"
+  name        = local.ingress
+  description = "${var.environment} entry: ${join(" → ", var.regions)} (managed by Terraform)"
   proxied     = true
 
   # steering off = failover: always the first healthy pool, in this order.
   steering_policy = "off"
-  default_pools   = [for region in var.regions : cloudflare_load_balancer_pool.app["${each.key}/${region}"].id]
-  fallback_pool   = cloudflare_load_balancer_pool.app["${each.key}/${var.regions[length(var.regions) - 1]}"].id
+  default_pools   = [for region in var.regions : cloudflare_load_balancer_pool.region[region].id]
+  fallback_pool   = cloudflare_load_balancer_pool.region[var.regions[length(var.regions) - 1]].id
 }

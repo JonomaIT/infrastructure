@@ -5,6 +5,10 @@ locals {
   env_short   = { "shared-services" = "shr", staging = "stg", production = "prd" }[var.environment]
   base        = "jonomait-${local.env_short}"
   cert_domain = "*.${var.zone}"
+
+  # Entry name of the environment (ADR-010): ingress.<zone> in production, ingress-<env>.<zone>
+  # elsewhere. Cloudflare checks /health on it to know the region is up.
+  ingress_host = var.environment == "production" ? "ingress.${var.zone}" : "ingress-${local.env_short}.${var.zone}"
 }
 
 data "aws_vpc" "main" {
@@ -70,12 +74,13 @@ resource "aws_acm_certificate_validation" "main" {
 
 # ------------------------------------------------------------------------ ALB
 module "alb" {
-  source = "git::https://github.com/JonomaIT/terraform-modules.git//alb?ref=v0.6.1"
+  source = "git::https://github.com/JonomaIT/terraform-modules.git//alb?ref=v0.7.0"
 
   name                = "${local.base}-alb-shared"
   vpc_id              = data.aws_vpc.main.id
   subnets             = data.aws_subnets.public.ids
   certificate_arn     = aws_acm_certificate_validation.main.certificate_arn
   ingress_cidrs       = data.cloudflare_ip_ranges.main.ipv4_cidrs
+  ingress_host        = local.ingress_host
   deletion_protection = var.deletion_protection
 }

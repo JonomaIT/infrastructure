@@ -70,7 +70,7 @@ resource "aws_acm_certificate_validation" "main" {
 
 # ------------------------------------------------------------------------ ALB
 module "alb" {
-  source = "git::https://github.com/JonomaIT/terraform-modules.git//alb?ref=v0.6.0"
+  source = "git::https://github.com/JonomaIT/terraform-modules.git//alb?ref=v0.6.1"
 
   name                = "${local.base}-alb-shared"
   vpc_id              = data.aws_vpc.main.id

@@ -1,9 +1,11 @@
 name: Deploy
 
 # Logic lives in JonomaIT/pipelines: this file only says when to run it and the apply order.
-#   pull request → plan of what changed (read-only)
-#   main         → apply of what changed (production waits for approval)
-#   manual       → plan + apply (or destroy) of a component, a tfvars or everything
+#   pull request → plan of what changed (read-only) + PR comment; "Plan result" is a required check
+#   main         → plan, ONE approval per account looking at the plans, apply of those plans
+#   manual       → the same for a component, a tfvars or everything, or destroy (reverse order)
+#   every night  → drift check: plan of what is deployed; changes open the "Terraform drift
+#                  detected" issue, a clean night closes it; never applies
 on:
   pull_request:
     branches:
@@ -11,6 +13,8 @@ on:
   push:
     branches:
       - main
+  schedule:
+    - cron: "0 9 * * *" # 06:00 in Brasília
   workflow_dispatch:
     inputs:
       target:
@@ -26,7 +30,9 @@ on:
 
 permissions:
   contents: read
-  id-token: write # OIDC with AWS
+  id-token: write      # OIDC with AWS
+  pull-requests: write # plan comment
+  issues: write        # drift issue
 
 # Never two runs touching the same states; an apply is never interrupted halfway.
 concurrency:
@@ -34,8 +40,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  terraform:
-    uses: JonomaIT/pipelines/.github/workflows/terraform-deploy.yml@v1.0.0
+  deploy:
+    uses: JonomaIT/pipelines/.github/workflows/terraform-deploy.yml@v1.1.0
     with:
       order: >-
         network
@@ -46,5 +52,6 @@ jobs:
         global/dns-cloudflare
       target: ${{ inputs.target || '' }}
       destroy: ${{ inputs.destroy || false }}
+      drift: ${{ github.event_name == 'schedule' }}
     secrets:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_JONOMA }}

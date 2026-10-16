@@ -10,7 +10,7 @@ data "aws_vpc" "main" {
 }
 
 module "ecs_cluster" {
-  source = "git::https://github.com/JonomaIT/terraform-modules.git//ecs-cluster?ref=v0.6.1"
+  source = "git::https://github.com/JonomaIT/terraform-modules.git//ecs-cluster?ref=v0.7.0"
 
   name               = "${local.base}-ecs"
   vpc_id             = data.aws_vpc.main.id

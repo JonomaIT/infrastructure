@@ -8,7 +8,7 @@ locals {
 }
 
 module "vpc" {
-  source = "git::https://github.com/JonomaIT/terraform-modules.git//vpc?ref=v0.6.1"
+  source = "git::https://github.com/JonomaIT/terraform-modules.git//vpc?ref=v0.7.0"
 
   project_name       = local.name
   cidr               = var.cidr

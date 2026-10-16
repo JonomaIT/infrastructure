@@ -41,18 +41,29 @@ global/cloudflare-zone                    (any time, once)
 
 A new region is **a new tfvars file** in `network`, `ecs-cluster` and `alb-shared`, plus its name in `regions` of `dns-cloudflare`. No code changes.
 
-## Running (by hand, until the deploy pipeline exists)
+## Deploy (pipeline)
+
+The logic lives in [`pipelines`](https://github.com/JonomaIT/pipelines) (`terraform-deploy`); `.github/workflows/deploy.yml` only says when to run it and the apply order.
+
+| When | What happens |
+|---|---|
+| pull request | plan of what changed (read-only role), posted as a PR comment; `Plan result` must pass |
+| merge to `main` | plan → **one approval per account** looking at the plans (run summary) → apply of those plans |
+| *Actions → Deploy → Run workflow* | the same for a component, a tfvars or everything; **`destroy`** tears it down in reverse order |
+| every night | drift check: changes in what is deployed open the *Terraform drift detected* issue |
+
+Bringing the lab up or down is one manual run (empty target), with `destroy` off or on.
+
+### By hand (debugging)
 
 ```bash
-aws sso login --sso-session jonomait
-export AWS_PROFILE=jonomait-staging
-export CLOUDFLARE_API_TOKEN=...   # only for components that use Cloudflare
+aws sso login --sso-session jonomait --use-device-code
+export AWS_PROFILE=jonomait-production
+source ~/.config/jonomait/cloudflare.env   # only for components that use Cloudflare
 
 cd network
-terraform init -reconfigure \
-  -backend-config=../backends/staging.tfbackend \
-  -backend-config=key=staging/us-east-1/network
-terraform plan -var-file=env/staging/us-east-1.tfvars
+terraform init -reconfigure   -backend-config=../backends/production.tfbackend   -backend-config=key=production/us-east-1/network
+terraform plan -var-file=env/production/us-east-1.tfvars
 ```
 
 State key: `<account>/<region>/<component>` for regional components, `<account>/global/<component>` and `<account>/cross-region/<component>` for the others (from `global/dns-cloudflare`, the key ends in `dns-cloudflare`). `-reconfigure` is required when switching account or region in the same directory.
@@ -75,7 +86,7 @@ The pipeline roles are created in each account by the `bootstrap` of the [`organ
 
 ## CI
 
-`ci.yml` runs on every pull request: `terraform fmt`, then for every component `validate` and its `terraform test` against **each** tfvars, with mocked providers (no credentials). The tests check the conventions: NAT count, cluster and namespace names, validation record only in the primary region, zone in Full (strict), CNAME vs load balancer by number of regions, peering routes on every route table.
+`ci.yml` calls `terraform-ci` from `pipelines` on every pull request: `terraform fmt`, then for every component `validate` and its `terraform test` against **each** tfvars, with mocked providers (no credentials), plus the security scan (gitleaks, TFLint, Trivy). The tests check the conventions: NAT count, cluster and namespace names, validation record only in the primary region, zone in Full (strict), CNAME vs load balancer by number of regions, peering routes on every route table.
 
 The previous lab (`network`, `ecs` and `routing` stacks with Global Accelerator) is kept in the **`lab-v1`** tag.
 

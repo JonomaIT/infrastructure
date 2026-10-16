@@ -6,6 +6,7 @@ JonomaIT platform infrastructure in Terraform: what the infra team operates in t
 
 | Component | Type | Runs in | Creates |
 |---|---|---|---|
+| `ecr` | regional | shared-services | App image repositories (immutable tags, scan on push), pull for the whole organization, replicated to the other regions |
 | `network` | regional | staging, production | VPC `jonomait-<env>-network`: private /20 and public /24 per AZ, NAT |
 | `ecs-cluster` | regional | staging, production | Cluster `jonomait-<env>-ecs` and the `jonomait.internal` namespace |
 | `alb-shared` | regional | staging, production | ACM `*.<zone>` validated through Cloudflare + ALB `jonomait-<env>-alb-shared`, HTTPS only, only from Cloudflare |

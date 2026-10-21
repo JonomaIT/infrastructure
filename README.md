@@ -7,14 +7,18 @@ JonomaIT platform infrastructure in Terraform: what the infra team operates in t
 | Component | Type | Runs in | Creates |
 |---|---|---|---|
 | `ecr` | regional | shared-services | App image repositories (immutable tags, scan on push), pull for the whole organization, replicated to the other regions |
-| `network` | regional | staging, production | VPC `jonomait-<env>-network`: private /20 and public /24 per AZ, NAT |
+| `network` | regional | staging, production | VPC `jonomait-<env>-network`: private /20 and public /24 per AZ, NAT, S3 and DynamoDB gateway endpoints |
 | `ecs-cluster` | regional | staging, production | Cluster `jonomait-<env>-ecs` and the `jonomait.internal` namespace |
 | `alb-shared` | regional | staging, production | ACM `*.<zone>` validated through Cloudflare + ALB `jonomait-<env>-alb-shared`, HTTPS only, only from Cloudflare |
 | `global/cloudflare-zone` | global | shared-services | Zone settings: Full (strict), Always Use HTTPS, TLS 1.2+, TLS 1.3 |
-| `global/dns-cloudflare` | global | staging, production | Public names: proxied CNAME (one region) or Cloudflare Load Balancing with failover (two regions) |
+| `global/dns-cloudflare` | global | staging, production | The environment's entry (`ingress`): proxied CNAME (one region) or Cloudflare Load Balancing with failover (two regions), and the **region state** (`/jonomait/<env>/platform/region-state`: the first region of `regions` is `ACTIVE`, the others `PASSIVE`, ADR-012) |
 | `cross-region/network-peering` | cross-region | production | Peering between the two VPCs, routes on both sides |
 
-`<env>` is `stg`, `prd` or `shr`. Apps are not here: they are deployed by the ECS runner in [`pipelines`](https://github.com/JonomaIT/pipelines) with the [`ecs-service`](https://github.com/JonomaIT/terraform-modules/tree/main/ecs-service) pattern.
+`<env>` is `stg`, `prd` or `shr`. Apps are not here: they are deployed by the ECS runner in [`pipelines`](https://github.com/JonomaIT/pipelines) with the [`ecs-service`](https://github.com/JonomaIT/terraform-modules/tree/main/ecs-service) pattern, and their data (tables, topics, queues, buckets) by the data runner, from the app's own `deploy/data.hcl` (ADR-011). A new app with an image only needs its repository name in `ecr`.
+
+### Failover of the processing (ADR-012)
+
+Cloudflare moves the **traffic** by itself when a region fails its health check. The **processing** (workers that only consume while their region is `ACTIVE`) moves when the order of `regions` in `global/dns-cloudflare/env/<account>.tfvars` changes: one PR, one apply, both the load balancer order and the region state flip together. The passive region's queues keep every message meanwhile (fan-out across regions), so nothing is lost; idempotency avoids processing twice.
 
 ```
 infrastructure/

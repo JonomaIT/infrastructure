@@ -86,4 +86,13 @@ run "plan" {
     condition     = startswith(output.ingress, "ingress")
     error_message = "The entry of the environment is ingress.<zone> (production) or ingress-<env>.<zone>."
   }
+
+  assert {
+    condition = (
+      aws_ssm_parameter.region_state[var.regions[0]].insecure_value == "ACTIVE" &&
+      length([for p in aws_ssm_parameter.region_state : p if p.insecure_value == "ACTIVE"]) == 1 &&
+      aws_ssm_parameter.region_state[var.regions[0]].name == "/jonomait/${var.environment}/platform/region-state"
+    )
+    error_message = "Exactly one ACTIVE region: the first of the failover order (ADR-012)."
+  }
 }

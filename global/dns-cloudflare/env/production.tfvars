@@ -4,3 +4,7 @@ regions     = ["us-east-1", "sa-east-1"] # two regions: Cloudflare Load Balancin
 
 # App names are not listed here: each app creates its own name, pointing to the ingress, when it
 # is deployed (ADR-010).
+
+# Lab: the whole account is torn down after each test, app data included. A real production keeps
+# the default (false): tables keep deletion protection and buckets with objects are never removed.
+allow_destroy_app_data = true

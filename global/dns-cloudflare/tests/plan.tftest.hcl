@@ -96,3 +96,17 @@ run "plan" {
     error_message = "Exactly one ACTIVE region: the first of the failover order (ADR-012)."
   }
 }
+
+run "platform_parameters" {
+  command = plan
+
+  assert {
+    condition = (
+      length(aws_ssm_parameter.platform) == 3 * length(var.regions) &&
+      aws_ssm_parameter.platform["${var.regions[0]}/zone"].insecure_value == var.zone &&
+      aws_ssm_parameter.platform["${var.regions[0]}/regions"].insecure_value == join(",", var.regions) &&
+      aws_ssm_parameter.platform["${var.regions[0]}/allow-destroy"].name == "/jonomait/${var.environment}/platform/allow-destroy"
+    )
+    error_message = "zone, regions and allow-destroy are published in every region, for the runners to read (ADR-014)."
+  }
+}

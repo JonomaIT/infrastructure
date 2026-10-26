@@ -12,3 +12,8 @@ output "mode" {
   description = "cname (one region) or load-balancer (two regions, failover in order)"
   value       = local.multi ? "load-balancer: ${join(" → ", var.regions)}" : "cname: ${var.regions[0]}"
 }
+
+output "platform_parameters" {
+  description = "What the platform decides for every app (ADR-014): zone, regions and whether app data may be destroyed"
+  value       = { for k, p in local.platform_parameters : k => p.value }
+}

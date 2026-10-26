@@ -22,3 +22,9 @@ variable "regions" {
     error_message = "regions must list 1 or 2 regions, primary first."
   }
 }
+
+variable "allow_destroy_app_data" {
+  type        = bool
+  description = "Labs only: app data (tables, buckets) loses deletion protection so a teardown can remove it. A real production keeps false"
+  default     = false
+}

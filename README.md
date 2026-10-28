@@ -11,14 +11,16 @@ JonomaIT platform infrastructure in Terraform: what the infra team operates in t
 | `ecs-cluster` | regional | staging, production | Cluster `jonomait-<env>-ecs` and the `jonomait.internal` namespace |
 | `alb-shared` | regional | staging, production | ACM `*.<zone>` validated through Cloudflare + ALB `jonomait-<env>-alb-shared`, HTTPS only, only from Cloudflare |
 | `global/cloudflare-zone` | global | shared-services | Zone settings: Full (strict), Always Use HTTPS, TLS 1.2+, TLS 1.3 |
-| `global/dns-cloudflare` | global | staging, production | The environment's entry (`ingress`): proxied CNAME (one region) or Cloudflare Load Balancing with failover (two regions), and the **region state** (`/jonomait/<env>/platform/region-state`: the first region of `regions` is `ACTIVE`, the others `PASSIVE`, ADR-012) |
+| `global/dns-cloudflare` | global | staging, production | The environment's entry (`ingress`): proxied CNAME (one region) or Cloudflare Load Balancing (two regions: failover, or active-active with `mode`), and the **region state** (`/jonomait/<env>/platform/region-state` and `active-regions`: in active-passive the first region of `regions` is `ACTIVE`, ADR-012; in active-active every region not in `out`, ADR-013) |
 | `cross-region/network-peering` | cross-region | production | Peering between the two VPCs, routes on both sides |
 
 `<env>` is `stg`, `prd` or `shr`. Apps are not here: they are deployed by the ECS runner in [`pipelines`](https://github.com/JonomaIT/pipelines) with the [`ecs-service`](https://github.com/JonomaIT/terraform-modules/tree/main/ecs-service) pattern, and their data (tables, topics, queues, buckets) by the data runner, from the app's own `deploy/data.hcl` (ADR-011). A new app with an image only needs its repository name in `ecr`.
 
-### Failover of the processing (ADR-012)
+### Failover of the processing (ADR-012, ADR-013)
 
 Cloudflare moves the **traffic** by itself when a region fails its health check. The **processing** (workers that only consume while their region is `ACTIVE`) moves when the order of `regions` in `global/dns-cloudflare/env/<account>.tfvars` changes: one PR, one apply, both the load balancer order and the region state flip together. The passive region's queues keep every message meanwhile (fan-out across regions), so nothing is lost; idempotency avoids processing twice.
+
+**Active/active** (`mode = "active-active"`, ADR-013): both regions take traffic (random steering, included in the base Load Balancing plan; each client sticks to one region) and both are `ACTIVE`. Each worker processes the messages created in its own region; the copies from the other region wait in its standby queue. **Failover:** list the failed region in `out` (one PR): it leaves the load balancer, turns `PASSIVE` and leaves `active-regions`, and the remaining region's workers take its copies. Remove it from `out` to bring it back.
 
 ```
 infrastructure/

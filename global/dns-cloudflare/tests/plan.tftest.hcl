@@ -90,11 +90,94 @@ run "plan" {
   assert {
     condition = (
       aws_ssm_parameter.region_state[var.regions[0]].insecure_value == "ACTIVE" &&
-      length([for p in aws_ssm_parameter.region_state : p if p.insecure_value == "ACTIVE"]) == 1 &&
+      length([for p in aws_ssm_parameter.region_state : p if p.insecure_value == "ACTIVE"]) == length(local.active_regions) &&
       aws_ssm_parameter.region_state[var.regions[0]].name == "/jonomait/${var.environment}/platform/region-state"
     )
-    error_message = "Exactly one ACTIVE region: the first of the failover order (ADR-012)."
+    error_message = "The ACTIVE regions are the first of the failover order (ADR-012) or all in service (ADR-013)."
   }
+}
+
+run "active_passive" {
+  command = plan
+
+  variables {
+    regions = ["us-east-1", "sa-east-1"]
+    mode    = "active-passive"
+  }
+
+  assert {
+    condition = (
+      cloudflare_load_balancer.ingress[0].steering_policy == "off" &&
+      aws_ssm_parameter.region_state["us-east-1"].insecure_value == "ACTIVE" &&
+      aws_ssm_parameter.region_state["sa-east-1"].insecure_value == "PASSIVE" &&
+      aws_ssm_parameter.platform["sa-east-1/active-regions"].insecure_value == "us-east-1"
+    )
+    error_message = "Active/passive: failover in order, only the first region ACTIVE."
+  }
+}
+
+run "active_active" {
+  command = plan
+
+  variables {
+    regions = ["us-east-1", "sa-east-1"]
+    mode    = "active-active"
+  }
+
+  assert {
+    condition = (
+      cloudflare_load_balancer.ingress[0].steering_policy == "random" &&
+      length(cloudflare_load_balancer.ingress[0].default_pools) == 2 &&
+      cloudflare_load_balancer.ingress[0].session_affinity == "ip_cookie" &&
+      alltrue([for p in aws_ssm_parameter.region_state : p.insecure_value == "ACTIVE"]) &&
+      aws_ssm_parameter.platform["us-east-1/active-regions"].insecure_value == "us-east-1,sa-east-1"
+    )
+    error_message = "Active/active: both regions take traffic (random, sticky per client) and both are ACTIVE."
+  }
+}
+
+run "active_active_with_a_region_out" {
+  command = plan
+
+  variables {
+    regions = ["us-east-1", "sa-east-1"]
+    mode    = "active-active"
+    out     = ["us-east-1"]
+  }
+
+  assert {
+    condition = (
+      length(cloudflare_load_balancer.ingress[0].default_pools) == 1 &&
+      aws_ssm_parameter.region_state["us-east-1"].insecure_value == "PASSIVE" &&
+      aws_ssm_parameter.region_state["sa-east-1"].insecure_value == "ACTIVE" &&
+      aws_ssm_parameter.platform["sa-east-1/active-regions"].insecure_value == "sa-east-1"
+    )
+    error_message = "A region out gets no traffic and turns PASSIVE; the other one takes its copies."
+  }
+}
+
+run "out_needs_active_active" {
+  command = plan
+
+  variables {
+    regions = ["us-east-1", "sa-east-1"]
+    mode    = "active-passive"
+    out     = ["sa-east-1"]
+  }
+
+  expect_failures = [var.out]
+}
+
+run "every_region_out_is_refused" {
+  command = plan
+
+  variables {
+    regions = ["us-east-1", "sa-east-1"]
+    mode    = "active-active"
+    out     = ["us-east-1", "sa-east-1"]
+  }
+
+  expect_failures = [var.out]
 }
 
 run "platform_parameters" {
@@ -102,11 +185,11 @@ run "platform_parameters" {
 
   assert {
     condition = (
-      length(aws_ssm_parameter.platform) == 3 * length(var.regions) &&
+      length(aws_ssm_parameter.platform) == 4 * length(var.regions) &&
       aws_ssm_parameter.platform["${var.regions[0]}/zone"].insecure_value == var.zone &&
       aws_ssm_parameter.platform["${var.regions[0]}/regions"].insecure_value == join(",", var.regions) &&
       aws_ssm_parameter.platform["${var.regions[0]}/allow-destroy"].name == "/jonomait/${var.environment}/platform/allow-destroy"
     )
-    error_message = "zone, regions and allow-destroy are published in every region, for the runners to read (ADR-014)."
+    error_message = "zone, regions, allow-destroy and active-regions are published in every region, for the runners and apps to read (ADR-014)."
   }
 }

@@ -9,8 +9,8 @@ output "region_state" {
 }
 
 output "mode" {
-  description = "cname (one region) or load-balancer (two regions, failover in order)"
-  value       = local.multi ? "load-balancer: ${join(" → ", var.regions)}" : "cname: ${var.regions[0]}"
+  description = "cname (one region) or load-balancer (two regions: failover in order, or active-active)"
+  value       = local.multi ? "load-balancer, ${var.mode}: ${join(var.mode == "active-active" ? " + " : " → ", local.serving)}" : "cname: ${var.regions[0]}"
 }
 
 output "platform_parameters" {

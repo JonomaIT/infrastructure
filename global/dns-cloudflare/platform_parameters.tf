@@ -6,13 +6,21 @@
 #   /jonomait/<env>/platform/regions         the regions the platform runs (apps pick among them)
 #   /jonomait/<env>/platform/allow-destroy   "true" only in a lab: app data may be destroyed
 #   /jonomait/<env>/platform/active-regions  the regions processing now (region_state.tf)
+#   /jonomait/<env>/platform/mode            active-passive or active-active (ADR-012, ADR-013)
+#   /jonomait/<env>/platform/serving-regions the regions taking traffic, in failover order
+#   /jonomait/<env>/platform/alb-<region>    the shared ALB of each region: an app with its own
+#                                            load balancer (health_failover, ADR-016) points here
 locals {
-  platform_parameters = {
+  platform_parameters = merge({
     zone            = { value = var.zone, description = "Cloudflare zone of the apps' public names (ADR-010)" }
     regions         = { value = join(",", var.regions), description = "Regions the platform runs, primary first: apps may only use these" }
     "allow-destroy" = { value = tostring(var.allow_destroy_app_data), description = "true only in a lab: app data loses deletion protection so a teardown can remove it" }
     active-regions  = { value = join(",", local.active_regions), description = "Regions processing now (${var.mode}): a worker takes the copies of a region missing here (ADR-013)" }
-  }
+    mode            = { value = var.mode, description = "active-passive or active-active: how an app's own load balancer steers (ADR-016)" }
+    serving-regions = { value = join(",", local.serving), description = "Regions taking traffic, in failover order (ADR-016)" }
+    }, {
+    for r in var.regions : "alb-${r}" => { value = local.alb_dns[r], description = "Shared ALB of ${r}: the origin of an app's own load balancer (ADR-016)" }
+  })
 }
 
 resource "aws_ssm_parameter" "platform" {

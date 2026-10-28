@@ -130,7 +130,8 @@ run "active_active" {
       length(cloudflare_load_balancer.ingress[0].default_pools) == 2 &&
       cloudflare_load_balancer.ingress[0].session_affinity == "ip_cookie" &&
       alltrue([for p in aws_ssm_parameter.region_state : p.insecure_value == "ACTIVE"]) &&
-      aws_ssm_parameter.platform["us-east-1/active-regions"].insecure_value == "us-east-1,sa-east-1"
+      aws_ssm_parameter.platform["us-east-1/active-regions"].insecure_value == "us-east-1,sa-east-1" &&
+      aws_ssm_parameter.platform["sa-east-1/mode"].insecure_value == "active-active"
     )
     error_message = "Active/active: both regions take traffic (random, sticky per client) and both are ACTIVE."
   }
@@ -150,7 +151,8 @@ run "active_active_with_a_region_out" {
       length(cloudflare_load_balancer.ingress[0].default_pools) == 1 &&
       aws_ssm_parameter.region_state["us-east-1"].insecure_value == "PASSIVE" &&
       aws_ssm_parameter.region_state["sa-east-1"].insecure_value == "ACTIVE" &&
-      aws_ssm_parameter.platform["sa-east-1/active-regions"].insecure_value == "sa-east-1"
+      aws_ssm_parameter.platform["sa-east-1/active-regions"].insecure_value == "sa-east-1" &&
+      aws_ssm_parameter.platform["us-east-1/serving-regions"].insecure_value == "sa-east-1"
     )
     error_message = "A region out gets no traffic and turns PASSIVE; the other one takes its copies."
   }
@@ -185,11 +187,12 @@ run "platform_parameters" {
 
   assert {
     condition = (
-      length(aws_ssm_parameter.platform) == 4 * length(var.regions) &&
+      length(aws_ssm_parameter.platform) == (6 + length(var.regions)) * length(var.regions) &&
+      aws_ssm_parameter.platform["${var.regions[0]}/alb-${var.regions[0]}"].insecure_value == "jonomait-alb-shared-1.us-east-1.elb.amazonaws.com" &&
       aws_ssm_parameter.platform["${var.regions[0]}/zone"].insecure_value == var.zone &&
       aws_ssm_parameter.platform["${var.regions[0]}/regions"].insecure_value == join(",", var.regions) &&
       aws_ssm_parameter.platform["${var.regions[0]}/allow-destroy"].name == "/jonomait/${var.environment}/platform/allow-destroy"
     )
-    error_message = "zone, regions, allow-destroy and active-regions are published in every region, for the runners and apps to read (ADR-014)."
+    error_message = "zone, regions, allow-destroy, active-regions, mode, serving-regions and every region's ALB are published in every region, for the runners and apps to read (ADR-014, ADR-016)."
   }
 }

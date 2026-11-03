@@ -18,8 +18,9 @@ run "plan" {
       for z in var.zones : [
         cloudflare_zone_setting.main["${z}/ssl"].value == "strict",
         cloudflare_zone_setting.main["${z}/always_use_https"].value == "on",
+        cloudflare_zone_setting.browser_cache_ttl[z].value == 0,
       ]
     ]))
-    error_message = "Every zone must use Full (strict) and always redirect to HTTPS."
+    error_message = "Every zone must use Full (strict), always redirect to HTTPS and respect the origin's cache headers."
   }
 }

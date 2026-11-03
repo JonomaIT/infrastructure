@@ -14,7 +14,12 @@ run "plan" {
   command = plan
 
   assert {
-    condition     = cloudflare_zone_setting.main["ssl"].value == "strict" && cloudflare_zone_setting.main["always_use_https"].value == "on"
-    error_message = "The zone must use Full (strict) and always redirect to HTTPS."
+    condition = alltrue(flatten([
+      for z in var.zones : [
+        cloudflare_zone_setting.main["${z}/ssl"].value == "strict",
+        cloudflare_zone_setting.main["${z}/always_use_https"].value == "on",
+      ]
+    ]))
+    error_message = "Every zone must use Full (strict) and always redirect to HTTPS."
   }
 }

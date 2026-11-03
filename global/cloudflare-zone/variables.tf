@@ -10,7 +10,12 @@ variable "environment" {
   }
 }
 
-variable "zone" {
-  type        = string
-  description = "Cloudflare zone (e.g. joshuel.com.br)"
+variable "zones" {
+  type        = list(string)
+  description = "Cloudflare zones whose settings Terraform owns: the platform's and the customer zones of global/platform (site_zones)"
+
+  validation {
+    condition     = length(var.zones) >= 1
+    error_message = "zones must list at least the platform's zone."
+  }
 }

@@ -1,17 +1,13 @@
-# What the platform decides for every app of the environment, published where the runners read it
-# (ADR-014). These are never variables an app could set from its own files: the runners read them
-# here, so an app's deploy/ cannot change the zone, the regions or the data protections.
+# The platform parameter that follows the entry: which regions process now (ADR-013). It changes
+# with mode and out, in the same apply as the load balancer and region-state.
 #
-#   /jonomait/<env>/platform/zone            the Cloudflare zone of the public names
-#   /jonomait/<env>/platform/regions         the regions the platform runs (apps pick among them)
-#   /jonomait/<env>/platform/allow-destroy   "true" only in a lab: app data may be destroyed
-#   /jonomait/<env>/platform/active-regions  the regions processing now (region_state.tf)
+#   /jonomait/<env>/platform/active-regions  a worker takes the copies of a region missing here
+#
+# The rest of the platform's parameters (zone, regions, allow-destroy, site-zones) live in
+# global/platform, which does not depend on the lab and is never destroyed with it.
 locals {
   platform_parameters = {
-    zone            = { value = var.zone, description = "Cloudflare zone of the apps' public names (ADR-010)" }
-    regions         = { value = join(",", var.regions), description = "Regions the platform runs, primary first: apps may only use these" }
-    "allow-destroy" = { value = tostring(var.allow_destroy_app_data), description = "true only in a lab: app data loses deletion protection so a teardown can remove it" }
-    active-regions  = { value = join(",", local.active_regions), description = "Regions processing now (${var.mode}): a worker takes the copies of a region missing here (ADR-013)" }
+    active-regions = { value = join(",", local.active_regions), description = "Regions processing now (${var.mode}): a worker takes the copies of a region missing here (ADR-013)" }
   }
 }
 

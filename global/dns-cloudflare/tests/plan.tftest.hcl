@@ -185,11 +185,9 @@ run "platform_parameters" {
 
   assert {
     condition = (
-      length(aws_ssm_parameter.platform) == 4 * length(var.regions) &&
-      aws_ssm_parameter.platform["${var.regions[0]}/zone"].insecure_value == var.zone &&
-      aws_ssm_parameter.platform["${var.regions[0]}/regions"].insecure_value == join(",", var.regions) &&
-      aws_ssm_parameter.platform["${var.regions[0]}/allow-destroy"].name == "/jonomait/${var.environment}/platform/allow-destroy"
+      length(aws_ssm_parameter.platform) == length(var.regions) &&
+      aws_ssm_parameter.platform["${var.regions[0]}/active-regions"].name == "/jonomait/${var.environment}/platform/active-regions"
     )
-    error_message = "zone, regions, allow-destroy and active-regions are published in every region, for the runners and apps to read (ADR-014)."
+    error_message = "Only active-regions is published here (the rest is global/platform), in every region."
   }
 }

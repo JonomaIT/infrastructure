@@ -11,6 +11,7 @@ JonomaIT platform infrastructure in Terraform: what the infra team operates in t
 | `ecs-cluster` | regional | staging, production | Cluster `jonomait-<env>-ecs` and the `jonomait.internal` namespace |
 | `alb-shared` | regional | staging, production | ACM `*.<zone>` validated through Cloudflare + ALB `jonomait-<env>-alb-shared`, HTTPS only, only from Cloudflare |
 | `global/cloudflare-zone` | global | shared-services | Zone settings: Full (strict), Always Use HTTPS, TLS 1.2+, TLS 1.3 |
+| `global/platform` | global | staging, production | **Persistent.** The platform's decisions for every app (ADR-014): `zone`, `regions`, `allow-destroy` and `site-zones` (customer domains a site may use) under `/jonomait/<env>/platform/`. No dependency on the lab: a permanent workload (a customer's site) keeps deploying while the lab is down |
 | `global/dns-cloudflare` | global | staging, production | The environment's entry (`ingress`): proxied CNAME (one region) or Cloudflare Load Balancing (two regions: failover, or active-active with `mode`), and the **region state** (`/jonomait/<env>/platform/region-state` and `active-regions`: in active-passive the first region of `regions` is `ACTIVE`, ADR-012; in active-active every region not in `out`, ADR-013) |
 | `cross-region/network-peering` | cross-region | production | Peering between the two VPCs, routes on both sides |
 
@@ -99,4 +100,4 @@ The previous lab (`network`, `ecs` and `routing` stacks with Global Accelerator)
 
 ## Costs
 
-Bill while they exist: NAT Gateway (one per VPC in the lab), the ALB, Fargate tasks and, with two regions, Cloudflare Load Balancing. Destroy in reverse order when done testing: `dns-cloudflare` → `network-peering` → `alb-shared` → `ecs-cluster` → `network`.
+Bill while they exist: NAT Gateway (one per VPC in the lab), the ALB, Fargate tasks and, with two regions, Cloudflare Load Balancing. A destroy of everything leaves the persistent components (`global/platform`, `global/cloudflare-zone`): only a destroy that targets one removes it. Destroy in reverse order when done testing: `dns-cloudflare` → `network-peering` → `alb-shared` → `ecs-cluster` → `network`.

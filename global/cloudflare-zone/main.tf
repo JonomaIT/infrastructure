@@ -33,6 +33,16 @@ resource "cloudflare_zone_setting" "main" {
   value      = local.settings[each.value.setting]
 }
 
+# Browser cache: respect what the origin sends (0). Cloudflare's default (4 hours) overrides
+# "no-cache" on CSS, JS and text, so a visitor could keep an old file for hours after a deploy.
+resource "cloudflare_zone_setting" "browser_cache_ttl" {
+  for_each = toset(var.zones)
+
+  zone_id    = data.cloudflare_zone.main[each.value].id
+  setting_id = "browser_cache_ttl"
+  value      = 0
+}
+
 # Before the second zone, the settings were keyed by name only.
 moved {
   from = cloudflare_zone_setting.main["ssl"]

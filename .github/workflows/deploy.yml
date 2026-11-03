@@ -3,7 +3,8 @@ name: Deploy
 # Logic lives in JonomaIT/pipelines: this file only says when to run it and the apply order.
 #   pull request → plan of what changed (read-only) + PR comment; "Plan result" is a required check
 #   main         → plan, ONE approval per account looking at the plans, apply of those plans
-#   manual       → the same for a component, a tfvars or everything, or destroy (reverse order)
+#   manual       → the same for a component, a tfvars or everything, or destroy (reverse order);
+#                  a destroy of everything leaves the persistent components (target them to remove)
 #   every night  → drift check: plan of what is deployed; changes open the "Terraform drift
 #                  detected" issue, a clean night closes it; never applies
 on:
@@ -41,9 +42,10 @@ concurrency:
 
 jobs:
   deploy:
-    uses: JonomaIT/pipelines/.github/workflows/terraform-deploy.yml@v1.4.2
+    uses: JonomaIT/pipelines/.github/workflows/terraform-deploy.yml@v2.6.0
     with:
       order: >-
+        global/platform
         ecr
         network
         ecs-cluster
@@ -51,6 +53,8 @@ jobs:
         cross-region/network-peering
         global/cloudflare-zone
         global/dns-cloudflare
+      # Not the lab: what a permanent workload (a customer's site) needs while the lab is down.
+      persistent: global/platform global/cloudflare-zone
       target: ${{ inputs.target || '' }}
       destroy: ${{ inputs.destroy || false }}
       drift: ${{ github.event_name == 'schedule' }}

@@ -1,2 +1,5 @@
 environment = "shared-services"
-zone        = "joshuel.com.br"
+zones = [
+  "joshuel.com.br",         # the platform's
+  "draleticiapenin.com.br", # customer site (global/platform site_zones)
+]

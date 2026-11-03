@@ -8,6 +8,11 @@
 #                   active-active:  every region in service, traffic split at random (included in
 #                                   the base Load Balancing plan; geo or proximity need the paid
 #                                   Traffic Steering add-on), each client kept on one region
+#
+# The entry needs the shared ALBs (alb-shared, the lab). When they do not exist (the lab is down)
+# the entry is simply left out, without an error: region-state and active-regions are still
+# written, and a change here never fails because the lab is off. Bringing the lab up (alb-shared
+# before this component) creates the entry.
 
 locals {
   env_short = { "shared-services" = "shr", staging = "stg", production = "prd" }[var.environment]
@@ -20,8 +25,11 @@ locals {
   # Same convention as alb-shared, whose /health answers on this host.
   ingress = var.environment == "production" ? "ingress.${var.zone}" : "ingress-${local.env_short}.${var.zone}"
 
-  alb_dns = merge(
-    { (var.regions[0]) = data.aws_lb.primary.dns_name },
+  # The entry exists only when every region's shared ALB does.
+  entry = length(data.aws_lbs.primary.arns) > 0 && (!local.multi || length(try(data.aws_lbs.secondary[0].arns, [])) > 0)
+
+  alb_dns = !local.entry ? {} : merge(
+    { (var.regions[0]) = data.aws_lb.primary[0].dns_name },
     local.multi ? { (var.regions[1]) = data.aws_lb.secondary[0].dns_name } : {},
   )
 }
@@ -32,19 +40,39 @@ data "cloudflare_zone" "main" {
   }
 }
 
+# Found by tag, not by name: an absent ALB is an empty list here, not an error.
+data "aws_lbs" "primary" {
+  tags = {
+    "jonomait:component" = "alb-shared"
+    "jonomait:env"       = var.environment
+  }
+}
+
+data "aws_lbs" "secondary" {
+  count    = local.multi ? 1 : 0
+  provider = aws.secondary
+
+  tags = {
+    "jonomait:component" = "alb-shared"
+    "jonomait:env"       = var.environment
+  }
+}
+
 data "aws_lb" "primary" {
+  count = local.entry ? 1 : 0
+
   name = local.alb_name
 }
 
 data "aws_lb" "secondary" {
-  count    = local.multi ? 1 : 0
+  count    = local.entry && local.multi ? 1 : 0
   provider = aws.secondary
   name     = local.alb_name
 }
 
 # ----------------------------------------------------------------- one region
 resource "cloudflare_dns_record" "ingress" {
-  count = local.multi ? 0 : 1
+  count = local.entry && !local.multi ? 1 : 0
 
   zone_id = data.cloudflare_zone.main.id
   name    = local.ingress
@@ -57,7 +85,7 @@ resource "cloudflare_dns_record" "ingress" {
 
 # --------------------------------------------------------------- two regions
 resource "cloudflare_load_balancer_monitor" "ingress" {
-  count = local.multi ? 1 : 0
+  count = local.entry && local.multi ? 1 : 0
 
   account_id     = data.cloudflare_zone.main.account.id
   description    = "${local.ingress} region health"
@@ -76,7 +104,7 @@ resource "cloudflare_load_balancer_monitor" "ingress" {
 }
 
 resource "cloudflare_load_balancer_pool" "region" {
-  for_each = local.multi ? toset(var.regions) : toset([])
+  for_each = local.entry && local.multi ? toset(var.regions) : toset([])
 
   account_id  = data.cloudflare_zone.main.account.id
   name        = replace("jonomait-${local.env_short}-${each.value}", ".", "-")
@@ -91,7 +119,7 @@ resource "cloudflare_load_balancer_pool" "region" {
 }
 
 resource "cloudflare_load_balancer" "ingress" {
-  count = local.multi ? 1 : 0
+  count = local.entry && local.multi ? 1 : 0
 
   zone_id     = data.cloudflare_zone.main.id
   name        = local.ingress

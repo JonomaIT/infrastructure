@@ -11,6 +11,9 @@ mock_provider "aws" {
   mock_data "aws_route_tables" {
     defaults = { ids = ["rtb-1", "rtb-2", "rtb-3"] }
   }
+  mock_data "aws_lbs" {
+    defaults = { arns = ["arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/jonomait-alb-shared/1"] }
+  }
   mock_data "aws_lb" {
     defaults = { dns_name = "jonomait-alb-shared-1.us-east-1.elb.amazonaws.com" }
   }
@@ -41,6 +44,9 @@ mock_provider "aws" {
   }
   mock_data "aws_route_tables" {
     defaults = { ids = ["rtb-1", "rtb-2", "rtb-3"] }
+  }
+  mock_data "aws_lbs" {
+    defaults = { arns = ["arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/jonomait-alb-shared/1"] }
   }
   mock_data "aws_lb" {
     defaults = { dns_name = "jonomait-alb-shared-1.us-east-1.elb.amazonaws.com" }
@@ -178,6 +184,24 @@ run "every_region_out_is_refused" {
   }
 
   expect_failures = [var.out]
+}
+
+run "lab_down_no_entry_no_error" {
+  command = plan
+
+  override_data {
+    target = data.aws_lbs.primary
+    values = { arns = [] }
+  }
+
+  assert {
+    condition = (
+      length(cloudflare_load_balancer.ingress) == 0 && length(cloudflare_dns_record.ingress) == 0 &&
+      length(cloudflare_load_balancer_pool.region) == 0 && length(aws_ssm_parameter.region_state) == length(var.regions) &&
+      startswith(output.mode, "none")
+    )
+    error_message = "Lab down (no shared ALB): no entry and no error; the region state is still written."
+  }
 }
 
 run "platform_parameters" {

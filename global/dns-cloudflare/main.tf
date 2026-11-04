@@ -14,16 +14,22 @@
 # written, and a change here never fails because the lab is off. Bringing the lab up (alb-shared
 # before this component) creates the entry.
 
+# The zone is the platform's (global/platform publishes it): written in one place per environment.
+data "aws_ssm_parameter" "zone" {
+  name = "/${var.prefix}/${var.environment}/platform/zone"
+}
+
 locals {
   env_short = { "shared-services" = "shr", staging = "stg", production = "prd" }[var.environment]
-  alb_name  = "jonomait-${local.env_short}-alb-shared"
+  alb_name  = "${var.prefix}-${local.env_short}-alb-shared"
+  zone      = data.aws_ssm_parameter.zone.insecure_value
   multi     = length(var.regions) > 1
 
   # Pools that take traffic: every region in failover order, or the regions in service.
   serving = var.mode == "active-active" ? [for r in var.regions : r if !contains(var.out, r)] : var.regions
 
   # Same convention as alb-shared, whose /health answers on this host.
-  ingress = var.environment == "production" ? "ingress.${var.zone}" : "ingress-${local.env_short}.${var.zone}"
+  ingress = var.environment == "production" ? "ingress.${local.zone}" : "ingress-${local.env_short}.${local.zone}"
 
   # The entry exists only when every region's shared ALB does.
   entry = length(data.aws_lbs.primary.arns) > 0 && (!local.multi || length(try(data.aws_lbs.secondary[0].arns, [])) > 0)
@@ -36,15 +42,15 @@ locals {
 
 data "cloudflare_zone" "main" {
   filter = {
-    name = var.zone
+    name = local.zone
   }
 }
 
 # Found by tag, not by name: an absent ALB is an empty list here, not an error.
 data "aws_lbs" "primary" {
   tags = {
-    "jonomait:component" = "alb-shared"
-    "jonomait:env"       = var.environment
+    "${var.prefix}:component" = "alb-shared"
+    "${var.prefix}:env"       = var.environment
   }
 }
 
@@ -53,8 +59,8 @@ data "aws_lbs" "secondary" {
   provider = aws.secondary
 
   tags = {
-    "jonomait:component" = "alb-shared"
-    "jonomait:env"       = var.environment
+    "${var.prefix}:component" = "alb-shared"
+    "${var.prefix}:env"       = var.environment
   }
 }
 
@@ -107,7 +113,7 @@ resource "cloudflare_load_balancer_pool" "region" {
   for_each = local.entry && local.multi ? toset(var.regions) : toset([])
 
   account_id  = data.cloudflare_zone.main.account.id
-  name        = replace("jonomait-${local.env_short}-${each.value}", ".", "-")
+  name        = replace("${var.prefix}-${local.env_short}-${each.value}", ".", "-")
   description = "${var.environment} shared ALB in ${each.value}"
   monitor     = cloudflare_load_balancer_monitor.ingress[0].id
 

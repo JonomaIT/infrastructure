@@ -1,3 +1,13 @@
+variable "prefix" {
+  type        = string
+  description = "Platform prefix (PROJECT_PREFIX org variable; the pipeline passes TF_VAR_prefix): names <prefix>-<env>-..., parameters /<prefix>/<env>/..., tags <prefix>:*"
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9]{1,14}$", var.prefix))
+    error_message = "prefix must be 2-15 lowercase letters and digits."
+  }
+}
+
 variable "environment" {
   type        = string
   description = "Account whose ALBs the entry points to"
@@ -6,11 +16,6 @@ variable "environment" {
     condition     = contains(["staging", "production"], var.environment)
     error_message = "environment must be staging or production."
   }
-}
-
-variable "zone" {
-  type        = string
-  description = "Cloudflare zone (e.g. joshuel.com.br)"
 }
 
 variable "regions" {

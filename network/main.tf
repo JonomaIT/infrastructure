@@ -4,11 +4,11 @@
 
 locals {
   env_short = { "shared-services" = "shr", staging = "stg", production = "prd" }[var.environment]
-  name      = "jonomait-${local.env_short}-network"
+  name      = "${var.prefix}-${local.env_short}-network"
 }
 
 module "vpc" {
-  source = "git::https://github.com/JonomaIT/terraform-modules.git//vpc?ref=v0.9.0"
+  source = "git::https://github.com/JonomaIT/terraform-modules.git//vpc?ref=v0.13.0"
 
   project_name       = local.name
   cidr               = var.cidr

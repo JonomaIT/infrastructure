@@ -7,12 +7,12 @@ JonomaIT platform infrastructure in Terraform: what the infra team operates in t
 | Component | Type | Runs in | Creates |
 |---|---|---|---|
 | `ecr` | regional | shared-services | App image repositories (immutable tags, scan on push), pull for the whole organization, replicated to the other regions |
-| `network` | regional | staging, production | VPC `jonomait-<env>-network`: private /20 and public /24 per AZ, NAT, S3 and DynamoDB gateway endpoints |
-| `ecs-cluster` | regional | staging, production | Cluster `jonomait-<env>-ecs` and the `jonomait.internal` namespace |
-| `alb-shared` | regional | staging, production | ACM `*.<zone>` validated through Cloudflare + ALB `jonomait-<env>-alb-shared`, HTTPS only, only from Cloudflare |
+| `network` | regional | staging, production | VPC `<prefix>-<env>-network`: private /20 and public /24 per AZ, NAT, S3 and DynamoDB gateway endpoints |
+| `ecs-cluster` | regional | staging, production | Cluster `<prefix>-<env>-ecs` and the `<prefix>.internal` namespace |
+| `alb-shared` | regional | staging, production | ACM `*.<zone>` validated through Cloudflare + ALB `<prefix>-<env>-alb-shared`, HTTPS only, only from Cloudflare |
 | `global/cloudflare-zone` | global | shared-services | Zone settings: Full (strict), Always Use HTTPS, TLS 1.2+, TLS 1.3 |
-| `global/platform` | global | staging, production | **Persistent.** The platform's decisions for every app (ADR-014): `zone`, `regions`, `allow-destroy` and `site-zones` (customer domains a site may use) under `/jonomait/<env>/platform/`. No dependency on the lab: a permanent workload (a customer's site) keeps deploying while the lab is down |
-| `global/dns-cloudflare` | global | staging, production | The environment's entry (`ingress`): proxied CNAME (one region) or Cloudflare Load Balancing (two regions: failover, or active-active with `mode`), and the **region state** (`/jonomait/<env>/platform/region-state` and `active-regions`: in active-passive the first region of `regions` is `ACTIVE`, ADR-012; in active-active every region not in `out`, ADR-013) |
+| `global/platform` | global | staging, production | **Persistent.** The platform's decisions for every app (ADR-014): `zone`, `regions`, `allow-destroy` and `site-zones` (customer domains a site may use) under `/<prefix>/<env>/platform/`. No dependency on the lab: a permanent workload (a customer's site) keeps deploying while the lab is down |
+| `global/dns-cloudflare` | global | staging, production | The environment's entry (`ingress`): proxied CNAME (one region) or Cloudflare Load Balancing (two regions: failover, or active-active with `mode`), and the **region state** (`/<prefix>/<env>/platform/region-state` and `active-regions`: in active-passive the first region of `regions` is `ACTIVE`, ADR-012; in active-active every region not in `out`, ADR-013) |
 | `cross-region/network-peering` | cross-region | production | Peering between the two VPCs, routes on both sides |
 
 `<env>` is `stg`, `prd` or `shr`. Apps are not here: they are deployed by the ECS runner in [`pipelines`](https://github.com/JonomaIT/pipelines) with the [`ecs-service`](https://github.com/JonomaIT/terraform-modules/tree/main/ecs-service) pattern, and their data (tables, topics, queues, buckets) by the data runner, from the app's own `deploy/data.hcl` (ADR-011). A new app with an image only needs its repository name in `ecr`.
@@ -25,18 +25,20 @@ Cloudflare moves the **traffic** by itself when a region fails its health check.
 
 ```
 infrastructure/
-├── backends/<account>.tfbackend        state bucket of each account
 ├── network/                            REGIONAL
 │   └── env/<account>/<region>.tfvars
 ├── ecs-cluster/  alb-shared/           REGIONAL (same layout)
 ├── global/
+│   ├── platform/env/<account>.tfvars   the zone and regions of the environment (one place)
 │   ├── cloudflare-zone/env/shared-services.tfvars
 │   └── dns-cloudflare/env/<account>.tfvars
 └── cross-region/
     └── network-peering/env/<account>.tfvars
 ```
 
-A component never reads another component's state: it finds what it needs **by name or tag** (VPC `Name = jonomait-<env>-network`, subnets `Tier = public | private`, ALB `jonomait-<env>-alb-shared`). The CIDRs follow the plan in the platform docs (`10.10/16` staging, `10.20/16` and `10.120/16` production).
+A component never reads another component's state: it finds what it needs **by name or tag** (VPC `Name = <prefix>-<env>-network`, subnets `Tier = public | private`, ALB `<prefix>-<env>-alb-shared`). The CIDRs follow the plan in the platform docs (`10.10/16` staging, `10.20/16` and `10.120/16` production).
+
+**Nothing names the platform in the code.** The prefix comes from the `PROJECT_PREFIX` org variable (`TF_VAR_prefix`), the state bucket of each account is `<prefix>-<account>-tfstate` (derived by the pipeline, in `STATE_REGION`) and the zone is written once per environment, in `global/platform/env/<account>.tfvars`: `alb-shared` and `dns-cloudflare` read it from `/<prefix>/<env>/platform/zone`. Another platform is other org variables and other tfvars, not other code.
 
 ### Order
 
@@ -56,21 +58,22 @@ The logic lives in [`pipelines`](https://github.com/JonomaIT/pipelines) (`terraf
 | When | What happens |
 |---|---|
 | pull request | plan of what changed (read-only role), posted as a PR comment; `Plan result` must pass |
-| merge to `main` | plan → **one approval per account** looking at the plans (run summary) → apply of those plans |
+| merge to `main` | plan → **one approval per account** looking at the plans (run summary) → apply of those plans. Only what is deployed changes: a component that is not (the lab, torn down) is left as it is |
 | *Actions → Deploy → Run workflow* | the same for a component, a tfvars or everything; **`destroy`** tears it down in reverse order |
 | every night | drift check: changes in what is deployed open the *Terraform drift detected* issue |
 
-Bringing the lab up or down is one manual run (empty target), with `destroy` off or on.
+Bringing the lab up or down is one manual run (empty target), with `destroy` off or on: the only way a component is created.
 
 ### By hand (debugging)
 
 ```bash
 aws sso login --sso-session jonomait --use-device-code
-export AWS_PROFILE=jonomait-production
+export AWS_PROFILE=jonomait-production TF_VAR_prefix=jonomait   # PROJECT_PREFIX
 source ~/.config/jonomait/cloudflare.env   # only for components that use Cloudflare
 
 cd network
-terraform init -reconfigure   -backend-config=../backends/production.tfbackend   -backend-config=key=production/us-east-1/network
+terraform init -reconfigure -backend-config=bucket=$TF_VAR_prefix-production-tfstate -backend-config=region=us-east-1 \
+  -backend-config=key=production/us-east-1/network
 terraform plan -var-file=env/production/us-east-1.tfvars
 ```
 

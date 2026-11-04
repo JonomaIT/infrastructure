@@ -1,6 +1,11 @@
 # Plans the component against each account tfvars with mocked providers (no credentials):
 #   for f in $(find env -name "*.tfvars"); do terraform test -var-file="$f"; done
 
+# PROJECT_PREFIX org variable (TF_VAR_prefix in the pipeline).
+variables {
+  prefix = "jonomait"
+}
+
 mock_provider "aws" {
   mock_data "aws_vpc" {
     defaults = { id = "vpc-12345678", cidr_block = "10.10.0.0/16" }
@@ -19,6 +24,9 @@ mock_provider "aws" {
   }
   mock_data "aws_region" {
     defaults = { region = "us-east-1" }
+  }
+  mock_data "aws_ssm_parameter" {
+    defaults = { insecure_value = "joshuel.com.br" }
   }
   mock_resource "aws_acm_certificate" {
     defaults = {
@@ -53,6 +61,9 @@ mock_provider "aws" {
   }
   mock_data "aws_region" {
     defaults = { region = "us-east-1" }
+  }
+  mock_data "aws_ssm_parameter" {
+    defaults = { insecure_value = "joshuel.com.br" }
   }
   mock_resource "aws_acm_certificate" {
     defaults = {
@@ -89,15 +100,15 @@ run "plan" {
   }
 
   assert {
-    condition     = startswith(output.ingress, "ingress")
-    error_message = "The entry of the environment is ingress.<zone> (production) or ingress-<env>.<zone>."
+    condition     = startswith(output.ingress, "ingress") && endswith(output.ingress, ".joshuel.com.br")
+    error_message = "The entry of the environment is ingress.<zone> (production) or ingress-<env>.<zone>, with the platform's zone."
   }
 
   assert {
     condition = (
       aws_ssm_parameter.region_state[var.regions[0]].insecure_value == "ACTIVE" &&
       length([for p in aws_ssm_parameter.region_state : p if p.insecure_value == "ACTIVE"]) == length(local.active_regions) &&
-      aws_ssm_parameter.region_state[var.regions[0]].name == "/jonomait/${var.environment}/platform/region-state"
+      aws_ssm_parameter.region_state[var.regions[0]].name == "/${var.prefix}/${var.environment}/platform/region-state"
     )
     error_message = "The ACTIVE regions are the first of the failover order (ADR-012) or all in service (ADR-013)."
   }
@@ -210,7 +221,7 @@ run "platform_parameters" {
   assert {
     condition = (
       length(aws_ssm_parameter.platform) == length(var.regions) &&
-      aws_ssm_parameter.platform["${var.regions[0]}/active-regions"].name == "/jonomait/${var.environment}/platform/active-regions"
+      aws_ssm_parameter.platform["${var.regions[0]}/active-regions"].name == "/${var.prefix}/${var.environment}/platform/active-regions"
     )
     error_message = "Only active-regions is published here (the rest is global/platform), in every region."
   }

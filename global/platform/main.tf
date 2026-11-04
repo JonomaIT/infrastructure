@@ -6,10 +6,11 @@
 # it (terraform-deploy persistent). A permanent workload, such as a customer's site, keeps
 # deploying while the lab is down.
 #
-#   /jonomait/<env>/platform/zone            the Cloudflare zone of the public names
-#   /jonomait/<env>/platform/regions         the regions the platform runs (apps pick among them)
-#   /jonomait/<env>/platform/allow-destroy   "true" only in a lab: app data may be destroyed
-#   /jonomait/<env>/platform/site-zones      other zones a site may have names in (a customer's
+#   /<prefix>/<env>/platform/zone            the Cloudflare zone of the public names (also read by
+#                                            alb-shared and dns-cloudflare: one place per environment)
+#   /<prefix>/<env>/platform/regions         the regions the platform runs (apps pick among them)
+#   /<prefix>/<env>/platform/allow-destroy   "true" only in a lab: app data may be destroyed
+#   /<prefix>/<env>/platform/site-zones      other zones a site may have names in (a customer's
 #                                            own domain); only when there is one
 #
 # The parameters that follow the entry (region-state, active-regions) stay in dns-cloudflare.
@@ -31,7 +32,7 @@ resource "aws_ssm_parameter" "platform" {
   for_each = { for pair in setproduct(keys(local.parameters), var.regions) : "${pair[1]}/${pair[0]}" => { key = pair[0], region = pair[1] } }
 
   region         = each.value.region
-  name           = "/jonomait/${var.environment}/platform/${each.value.key}"
+  name           = "/${var.prefix}/${var.environment}/platform/${each.value.key}"
   description    = local.parameters[each.value.key].description
   type           = "String"
   insecure_value = local.parameters[each.value.key].value # not secrets: readable in plans

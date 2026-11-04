@@ -1,5 +1,5 @@
 output "alb_name" {
-  description = "Shared ALB (apps and dns-cloudflare find it by the name jonomait-<env>-alb-shared)"
+  description = "Shared ALB (apps and dns-cloudflare find it by the name <prefix>-<env>-alb-shared)"
   value       = "${local.base}-alb-shared"
 }
 

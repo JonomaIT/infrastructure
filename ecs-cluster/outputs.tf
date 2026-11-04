@@ -1,5 +1,5 @@
 output "cluster_name" {
-  description = "ECS cluster (apps find it by the name jonomait-<env>-ecs)"
+  description = "ECS cluster (apps find it by the name <prefix>-<env>-ecs)"
   value       = module.ecs_cluster.cluster_name
 }
 

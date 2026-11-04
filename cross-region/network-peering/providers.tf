@@ -3,11 +3,11 @@ provider "aws" {
 
   default_tags {
     tags = {
-      "jonomait:env"        = var.environment
-      "jonomait:app"        = "plataforma"
-      "jonomait:repo"       = "infrastructure"
-      "jonomait:component"  = "cross-region/network-peering"
-      "jonomait:managed-by" = "terraform"
+      "${var.prefix}:env"        = var.environment
+      "${var.prefix}:app"        = "plataforma"
+      "${var.prefix}:repo"       = "infrastructure"
+      "${var.prefix}:component"  = "cross-region/network-peering"
+      "${var.prefix}:managed-by" = "terraform"
     }
   }
 }
@@ -18,11 +18,11 @@ provider "aws" {
 
   default_tags {
     tags = {
-      "jonomait:env"        = var.environment
-      "jonomait:app"        = "plataforma"
-      "jonomait:repo"       = "infrastructure"
-      "jonomait:component"  = "cross-region/network-peering"
-      "jonomait:managed-by" = "terraform"
+      "${var.prefix}:env"        = var.environment
+      "${var.prefix}:app"        = "plataforma"
+      "${var.prefix}:repo"       = "infrastructure"
+      "${var.prefix}:component"  = "cross-region/network-peering"
+      "${var.prefix}:managed-by" = "terraform"
     }
   }
 }

@@ -1,5 +1,5 @@
 output "vpc_id" {
-  description = "VPC ID (other components find it by the Name tag jonomait-<env>-network)"
+  description = "VPC ID (other components find it by the Name tag <prefix>-<env>-network)"
   value       = module.vpc.vpc_id
 }
 

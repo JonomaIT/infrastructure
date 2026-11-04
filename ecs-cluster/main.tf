@@ -1,8 +1,8 @@
-# ECS cluster of this account in this region and the jonomait.internal namespace (app ↔ app).
+# ECS cluster of this account in this region and the <prefix>.internal namespace (app ↔ app).
 
 locals {
   env_short = { "shared-services" = "shr", staging = "stg", production = "prd" }[var.environment]
-  base      = "jonomait-${local.env_short}"
+  base      = "${var.prefix}-${local.env_short}"
 }
 
 data "aws_vpc" "main" {
@@ -10,10 +10,10 @@ data "aws_vpc" "main" {
 }
 
 module "ecs_cluster" {
-  source = "git::https://github.com/JonomaIT/terraform-modules.git//ecs-cluster?ref=v0.9.0"
+  source = "git::https://github.com/JonomaIT/terraform-modules.git//ecs-cluster?ref=v0.13.0"
 
   name               = "${local.base}-ecs"
   vpc_id             = data.aws_vpc.main.id
-  namespace          = "jonomait.internal"
+  namespace          = "${var.prefix}.internal"
   container_insights = var.container_insights
 }

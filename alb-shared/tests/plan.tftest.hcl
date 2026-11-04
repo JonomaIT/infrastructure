@@ -1,6 +1,11 @@
 # Plans the component against each account tfvars with mocked providers (no credentials):
 #   for f in $(find env -name "*.tfvars"); do terraform test -var-file="$f"; done
 
+# PROJECT_PREFIX org variable (TF_VAR_prefix in the pipeline).
+variables {
+  prefix = "jonomait"
+}
+
 mock_provider "aws" {
   mock_data "aws_vpc" {
     defaults = { id = "vpc-12345678", cidr_block = "10.10.0.0/16" }
@@ -16,6 +21,9 @@ mock_provider "aws" {
   }
   mock_data "aws_region" {
     defaults = { region = "us-east-1" }
+  }
+  mock_data "aws_ssm_parameter" {
+    defaults = { insecure_value = "joshuel.com.br" }
   }
   mock_resource "aws_acm_certificate" {
     defaults = {
@@ -45,5 +53,14 @@ run "plan" {
   assert {
     condition     = length(cloudflare_dns_record.validation) == (var.create_validation_records ? 1 : 0)
     error_message = "Only the primary region creates the validation record."
+  }
+}
+
+run "zone_comes_from_the_platform" {
+  command = plan
+
+  assert {
+    condition     = aws_acm_certificate.main.domain_name == "*.joshuel.com.br" && endswith(local.ingress_host, ".joshuel.com.br")
+    error_message = "The certificate and the ingress use the platform's zone (global/platform), not a tfvars of this component."
   }
 }

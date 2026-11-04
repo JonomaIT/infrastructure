@@ -1,6 +1,11 @@
 # Plans the component against each account tfvars with mocked providers (no credentials):
 #   for f in $(find env -name "*.tfvars"); do terraform test -var-file="$f"; done
 
+# PROJECT_PREFIX org variable (TF_VAR_prefix in the pipeline).
+variables {
+  prefix = "jonomait"
+}
+
 mock_provider "aws" {
   mock_data "aws_vpc" {
     defaults = { id = "vpc-12345678", cidr_block = "10.10.0.0/16" }

@@ -1,9 +1,9 @@
 # Peering between this account's VPCs in the primary and secondary regions, with routes on both
-# sides. Runs after network in both regions (VPCs found by the Name tag jonomait-<env>-network).
+# sides. Runs after network in both regions (VPCs found by the Name tag <prefix>-<env>-network).
 
 locals {
   env_short = { "shared-services" = "shr", staging = "stg", production = "prd" }[var.environment]
-  vpc_name  = "jonomait-${local.env_short}-network"
+  vpc_name  = "${var.prefix}-${local.env_short}-network"
 }
 
 data "aws_caller_identity" "current" {}
@@ -50,7 +50,7 @@ resource "aws_vpc_peering_connection_accepter" "main" {
   }
 }
 
-# Names in the other VPC (e.g. its jonomait.internal services) resolve to private addresses.
+# Names in the other VPC (e.g. its <prefix>.internal services) resolve to private addresses.
 resource "aws_vpc_peering_connection_options" "requester" {
   vpc_peering_connection_id = aws_vpc_peering_connection_accepter.main.id
 

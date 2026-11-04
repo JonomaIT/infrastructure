@@ -1,3 +1,13 @@
+variable "prefix" {
+  type        = string
+  description = "Platform prefix (PROJECT_PREFIX org variable; the pipeline passes TF_VAR_prefix): names <prefix>-<env>-..., parameters /<prefix>/<env>/..., tags <prefix>:*"
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9]{1,14}$", var.prefix))
+    error_message = "prefix must be 2-15 lowercase letters and digits."
+  }
+}
+
 variable "environment" {
   type        = string
   description = "Account holding the registry: images are built once and promoted, so only shared-services"

@@ -42,29 +42,3 @@ resource "cloudflare_zone_setting" "browser_cache_ttl" {
   setting_id = "browser_cache_ttl"
   value      = 0
 }
-
-# Before the second zone, the settings were keyed by name only.
-moved {
-  from = cloudflare_zone_setting.main["ssl"]
-  to   = cloudflare_zone_setting.main["joshuel.com.br/ssl"]
-}
-
-moved {
-  from = cloudflare_zone_setting.main["always_use_https"]
-  to   = cloudflare_zone_setting.main["joshuel.com.br/always_use_https"]
-}
-
-moved {
-  from = cloudflare_zone_setting.main["automatic_https_rewrites"]
-  to   = cloudflare_zone_setting.main["joshuel.com.br/automatic_https_rewrites"]
-}
-
-moved {
-  from = cloudflare_zone_setting.main["min_tls_version"]
-  to   = cloudflare_zone_setting.main["joshuel.com.br/min_tls_version"]
-}
-
-moved {
-  from = cloudflare_zone_setting.main["tls_1_3"]
-  to   = cloudflare_zone_setting.main["joshuel.com.br/tls_1_3"]
-}

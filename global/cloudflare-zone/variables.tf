@@ -12,7 +12,7 @@ variable "environment" {
 
 variable "zones" {
   type        = list(string)
-  description = "Cloudflare zones whose settings Terraform owns: the platform's and the customer zones of global/platform (site_zones)"
+  description = "Cloudflare zones whose settings Terraform owns: the platform's and the customer zones of global/platform (zone_owners)"
 
   validation {
     condition     = length(var.zones) >= 1

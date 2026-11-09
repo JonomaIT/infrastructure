@@ -26,11 +26,11 @@ run "site_zones_only_when_set" {
   command = plan
 
   variables {
-    site_zones = []
+    zone_owners = {}
   }
 
   assert {
-    condition     = !contains(keys(local.parameters), "site-zones")
+    condition     = !contains(keys(local.parameters), "site-zones") && !contains(keys(local.parameters), "zone-owners")
     error_message = "No customer zone: no site-zones parameter (SSM does not take an empty value)."
   }
 }
@@ -39,12 +39,15 @@ run "customer_zone" {
   command = plan
 
   variables {
-    regions    = ["us-east-1", "sa-east-1"]
-    site_zones = ["cliente.com.br"]
+    regions     = ["us-east-1", "sa-east-1"]
+    zone_owners = { "joshuel.com.br" = "web-joshuel", "cliente.com.br" = "web-cliente" }
   }
 
   assert {
-    condition     = aws_ssm_parameter.platform["sa-east-1/site-zones"].insecure_value == "cliente.com.br"
-    error_message = "The zones a site may use are published with the rest."
+    condition = (
+      aws_ssm_parameter.platform["sa-east-1/site-zones"].insecure_value == "cliente.com.br" &&
+      aws_ssm_parameter.platform["sa-east-1/zone-owners"].insecure_value == "cliente.com.br=web-cliente,joshuel.com.br=web-joshuel"
+    )
+    error_message = "Customer zones (site-zones) and the owner of every zone (zone-owners) are published with the rest; the platform's zone is not a customer zone."
   }
 }

@@ -33,10 +33,15 @@ variable "regions" {
   }
 }
 
-variable "site_zones" {
-  type        = list(string)
-  description = "Other Cloudflare zones a site may have names in (a customer's own domain). Each must exist in Cloudflare, with global/cloudflare-zone managing its settings"
-  default     = []
+variable "zone_owners" {
+  type        = map(string)
+  description = "Zone => the app (repo name) that owns it. The platform's own zone gives that app its apex (labels stay open to every app); any other zone is a customer's domain that only its app may use (site-zones). Each zone must exist in Cloudflare, with global/cloudflare-zone managing its settings"
+  default     = {}
+
+  validation {
+    condition     = alltrue([for app in values(var.zone_owners) : can(regex("^[a-z][a-z0-9-]{1,30}[a-z0-9]$", app))])
+    error_message = "zone_owners values are app names (the repo name, e.g. web-joshuel)."
+  }
 }
 
 variable "allow_destroy_app_data" {

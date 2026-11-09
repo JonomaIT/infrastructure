@@ -1,5 +1,5 @@
 # Zone-wide settings of the Cloudflare zones, owned by Terraform: the platform's zone and the
-# customer zones of global/platform (site_zones). Runs once, from shared-services (the zones are
+# customer zones of global/platform (zone_owners). Runs once, from shared-services (the zones are
 # shared by every account). Records and load balancers live in dns-cloudflare and in the apps.
 #
 # Persistent: a destroy of everything leaves it (terraform-deploy persistent). Without these
